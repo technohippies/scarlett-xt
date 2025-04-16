@@ -1,9 +1,9 @@
 {
   "onInstall_title": {
-    "message": "Hi! I'm Scarlett!"
+    "message": "I'm Scarlett!"
   },
   "onInstall_configurePrompt": {
-    "message": "Connect an LLM!"
+    "message": "Tutor, lifecoach, friend."
   },
   "onInstall_localTab": {
     "message": "Local"

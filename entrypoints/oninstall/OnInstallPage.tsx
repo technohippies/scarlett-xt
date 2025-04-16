@@ -6,6 +6,8 @@ import { InputWithIcon } from '../../src/components/ui/input-with-icon';
 import { Button } from '../../src/components/ui/button';
 import { Key } from '@phosphor-icons/react';
 import { cn } from '../../lib/utils';
+// Import the hook and related types/configs
+import { useProviderStatus, localProvidersConfig, LocalStatus } from '../../src/hooks/useProviderStatus'; 
 
 // Simple hook for getting translations
 // In a larger app, consider a dedicated context or library
@@ -22,119 +24,28 @@ const Spinner = () => (
   </svg>
 );
 
-// Define provider configurations
-interface LocalProviderConfig {
-  id: string;
-  name: string;
-  logo: string;
-  endpoint: string;
-  checkPath: string; // Path to check for status (e.g., /models, /version)
-  checkMethod?: string; // Usually GET
-}
-
-const localProvidersConfig: LocalProviderConfig[] = [
-  {
-    id: 'ollama',
-    name: 'Ollama',
-    logo: '/images/ollama.png',
-    endpoint: 'http://localhost:11434',
-    checkPath: '/api/version' // Ollama has a specific version endpoint
-  },
-  {
-    id: 'lmstudio',
-    name: 'LMStudio',
-    logo: '/images/lmstudio.png',
-    endpoint: 'http://localhost:1234',
-    checkPath: '/v1/models' // OpenAI compatible endpoint
-  },
-  {
-    id: 'janai',
-    name: 'Jan.ai',
-    logo: '/images/jan.png',
-    endpoint: 'http://127.0.0.1:1337',
-    checkPath: '/v1/models' // OpenAI compatible endpoint
-  },
-];
-
-type LocalStatus = 'checking' | 'connected' | 'error' | 'not-running';
-
 function OnInstallPage() {
   const { t } = useTranslation();
-  const [localProviderStatuses, setLocalProviderStatuses] = useState<Record<string, LocalStatus>>(
-    Object.fromEntries(localProvidersConfig.map(p => [p.id, 'checking']))
-  );
+  // Get status and providers list from the hook
+  const { statuses: localProviderStatuses, providers } = useProviderStatus(); 
+  
   const [selectedLocalProvider, setSelectedLocalProvider] = useState<string | null>(null);
-  const [autoSelected, setAutoSelected] = useState(false); 
   const [apiKey, setApiKey] = useState('');
-  const intervalRef = useRef<NodeJS.Timeout | null>(null); // Ref to store interval ID
+  // Auto-selection logic now lives here, watching the statuses from the hook
+  const [autoSelected, setAutoSelected] = useState(false); 
 
-  // Function to check a single provider's status
-  const checkProviderStatus = useCallback(async (provider: LocalProviderConfig) => {
-    // Don't re-check if already connected
-    if (localProviderStatuses[provider.id] === 'connected') return;
-
-    console.log(`Checking status for ${provider.name}...`);
-    setLocalProviderStatuses(prev => ({ ...prev, [provider.id]: 'checking' }));
-
-    try {
-      const response = await fetch(`${provider.endpoint}${provider.checkPath}`, {
-        method: provider.checkMethod || 'GET',
-        signal: AbortSignal.timeout(3000) // Add a timeout to avoid hanging indefinitely
-      });
-
-      if (response.ok) {
-        console.log(`${provider.name} detected!`);
-        setLocalProviderStatuses(prev => ({ ...prev, [provider.id]: 'connected' }));
-        // Auto-select if this is the first one detected
-        if (!autoSelected && !selectedLocalProvider) {
-           setSelectedLocalProvider(provider.id);
-           setAutoSelected(true); 
-           console.log("Auto-selected:", provider.id);
-        }
-      } else {
-         console.log(`${provider.name} responded but not OK: ${response.status}`);
-         setLocalProviderStatuses(prev => ({ ...prev, [provider.id]: 'error' }));
-      }
-    } catch (error) {
-      console.log(`Error checking ${provider.name}:`, error);
-      // Assume fetch failure means not running (could refine error checking)
-      setLocalProviderStatuses(prev => ({ ...prev, [provider.id]: 'not-running' }));
-    }
-  }, [localProviderStatuses, autoSelected, selectedLocalProvider]); // Include dependencies
-
-  // Effect for initial check and polling
   useEffect(() => {
-    console.log("Running initial provider checks...");
-    // Initial check for all providers
-    localProvidersConfig.forEach(provider => checkProviderStatus(provider));
+    if (autoSelected || selectedLocalProvider) return; // Don't auto-select if already selected manually or automatically
 
-    // Clear previous interval if any
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
+    // Find the first provider that is connected
+    const firstConnected = providers.find(p => localProviderStatuses[p.id] === 'connected');
+
+    if (firstConnected) {
+      console.log("Auto-selecting first connected provider:", firstConnected.id);
+      setSelectedLocalProvider(firstConnected.id);
+      setAutoSelected(true);
     }
-
-    // Set up polling interval to re-check non-connected providers
-    intervalRef.current = setInterval(() => {
-      console.log("Polling providers...");
-      localProvidersConfig.forEach(provider => {
-        // Access the latest state using the functional update form is safer inside intervals,
-        // but for simplicity here we rely on the state captured when interval was set up.
-        // Re-check only if not currently connected.
-        if (localProviderStatuses[provider.id] !== 'connected') {
-            checkProviderStatus(provider);
-        }
-      });
-    }, 5000); // Poll every 5 seconds
-
-    // Cleanup function to clear interval on unmount
-    return () => {
-      if (intervalRef.current) {
-        console.log("Clearing polling interval.");
-        clearInterval(intervalRef.current);
-      }
-    };
-  // IMPORTANT: Pass checkProviderStatus in dependency array
-  }, [checkProviderStatus, localProviderStatuses]); // Re-run if checkProviderStatus changes (due to its own deps changing)
+  }, [localProviderStatuses, providers, autoSelected, selectedLocalProvider]); // Depend on statuses from hook
 
   const handleLocalProviderSelect = (value: string) => {
     if (value) { 
@@ -180,9 +91,10 @@ function OnInstallPage() {
               value={selectedLocalProvider || ''} 
               onValueChange={handleLocalProviderSelect} 
             >
-              {localProvidersConfig.map((provider) => {
-                const status = localProviderStatuses[provider.id] ?? 'checking';
-                const isDisabled = status !== 'connected'; // Only enable if connected
+              {providers.map((provider) => {
+                // Get status from hook state
+                const status = localProviderStatuses[provider.id] ?? 'checking'; 
+                const isDisabled = status !== 'connected';
 
                 return (
                   <ToggleGroupItem
@@ -224,7 +136,8 @@ function OnInstallPage() {
             <Button
               size="lg"
               className="w-full mt-6"
-              disabled={!selectedLocalProvider || localProviderStatuses[selectedLocalProvider] !== 'connected'}
+              // Read status from hook state for the selected provider
+              disabled={!selectedLocalProvider || localProviderStatuses[selectedLocalProvider] !== 'connected'} 
               onClick={() => handleSaveConfiguration(selectedLocalProvider!)}
             >
               Connect 

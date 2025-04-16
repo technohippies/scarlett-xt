@@ -1315,7 +1315,7 @@ var background = function() {
   let ws;
   function getDevServerWebSocket() {
     if (ws == null) {
-      const serverUrl = "http://localhost:3000";
+      const serverUrl = "http://localhost:3001";
       logger.debug("Connecting to dev server @", serverUrl);
       ws = new WebSocket(serverUrl, "vite-hmr");
       ws.addWxtEventListener = ws.addEventListener.bind(ws);

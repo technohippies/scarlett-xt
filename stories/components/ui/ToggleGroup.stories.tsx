@@ -51,6 +51,7 @@ const meta = {
       options: ['horizontal', 'vertical'],
     },
     // Add a story-specific arg to control item status for demo
+    // @ts-expect-error - itemStatus is not a real prop, only for story control
     itemStatus: {
       control: 'select',
       options: ['checking', 'connected', 'not-running', 'error'],
@@ -64,6 +65,7 @@ const meta = {
     // Set width for the group, ensure vertical layout
     className: 'flex-col w-96', // Example width, adjust as needed
     orientation: 'vertical',
+    // @ts-expect-error - itemStatus is not a real prop, only for story control
     itemStatus: 'checking', // Default to checking for the main story view
   },
 } satisfies Meta<typeof ToggleGroup>;
@@ -114,6 +116,7 @@ export const DefaultChecking: Story = {
   render: renderGroup,
   args: {
     type: 'single',
+    // @ts-expect-error - itemStatus is not a real prop, only for story control
     itemStatus: 'checking', // Explicitly set checking state
   },
 };
@@ -123,6 +126,7 @@ export const ConnectedExample: Story = {
   render: renderGroup,
   args: {
      type: 'single',
+     // @ts-expect-error - itemStatus is not a real prop, only for story control
      itemStatus: 'connected', // Show connected state
   }
 };

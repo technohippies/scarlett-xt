@@ -73,7 +73,7 @@ declare module "wxt/browser" {
       options?: GetMessageOptions,
     ): string;
     /**
-     * "Hi! I'm Scarlett!"
+     * "I'm Scarlett!"
      */
     getMessage(
       messageName: "onInstall_title",
@@ -81,7 +81,7 @@ declare module "wxt/browser" {
       options?: GetMessageOptions,
     ): string;
     /**
-     * "Connect an LLM!"
+     * "Tutor, lifecoach, friend."
      */
     getMessage(
       messageName: "onInstall_configurePrompt",
