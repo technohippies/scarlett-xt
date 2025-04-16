@@ -50,6 +50,9 @@ export default defineConfig({
     //   "page": "model-selection.html",
     //   "open_in_tab": true
     // },
+    chrome_url_overrides: {
+      newtab: "newtab.html" // Point to our newtab entrypoint
+    },
     permissions: [
       "storage",
       "offscreen",
