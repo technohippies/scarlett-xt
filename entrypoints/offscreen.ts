@@ -5,7 +5,7 @@
 import browser, { type Runtime } from 'webextension-polyfill'; // Needed for getURL, explicitly import Runtime type
 // import { pipeline, PipelineType, Pipeline, ProgressCallback } from '@huggingface/transformers'; // Import pipeline and ProgressCallback
 // Import the schema content as a raw string
-import dbSchemaSql from '~/utils/dbSchema.sql?raw'; 
+import dbSchemaSql from '../utils/dbSchema.sql?raw'; // Use relative path
 
 // Assume defineUnlistedScript is globally available in this context
 export default defineUnlistedScript(() => {

@@ -2,3 +2,11 @@ CREATE TABLE IF NOT EXISTS test_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL
 ); 
+
+-- Table for storing clipped web pages
+CREATE TABLE IF NOT EXISTS clips (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    url TEXT NOT NULL UNIQUE, -- Ensure URLs are unique
+    clipped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- Record when it was clipped
+); 

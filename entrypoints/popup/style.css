@@ -1,0 +1,41 @@
+body {
+  margin: 0;
+  font-family: sans-serif;
+  width: 250px; /* Adjust width as needed */
+  padding: 10px;
+  background-color: #f4f4f4;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+button {
+  padding: 8px 12px;
+  cursor: pointer;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: #fff;
+}
+
+button:hover {
+  background-color: #eee;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.status {
+  font-size: 0.9em;
+  color: #555;
+  text-align: center;
+}
+
+.error {
+  color: red;
+  font-weight: bold;
+} 

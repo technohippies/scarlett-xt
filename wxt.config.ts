@@ -16,9 +16,23 @@ export default defineConfig({
     },
   }),
   manifest: {
+    // Define the browser action (popup)
+    action: {
+      // default_title is often inferred from popup.html <title> by WXT, but can be set explicitly
+      // default_title: "Scarlett Clipper", 
+      default_popup: "popup.html", // Points to the entrypoint
+      default_icon: { // Define the icon sizes here
+        16: "/icon/16.png",
+        32: "/icon/32.png",
+        48: "/icon/48.png",
+        128: "/icon/128.png"
+      }
+    },
     permissions: [
       "storage",
       "offscreen",
+      "tabs",
+      "notifications",
       // Add any other permissions your extension needs back here
     ],
     web_accessible_resources: [
@@ -34,6 +48,6 @@ export default defineConfig({
     },
   },
   webExt: { // Keep startUrls if desired for development
-    startUrls: ["https://x.com"],
+    startUrls: ["https://example.com"],
   },
 });

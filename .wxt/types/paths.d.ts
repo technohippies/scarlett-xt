@@ -5,7 +5,6 @@ declare module "wxt/browser" {
   export type PublicPath =
     | "/"
     | "/background.js"
-    | "/content-scripts/content.js"
     | "/electric-sql/_int.tar.gz"
     | "/electric-sql/adminpack.tar.gz"
     | "/electric-sql/amcheck.tar.gz"
@@ -251,6 +250,7 @@ declare module "wxt/browser" {
     | "/icon/96.png"
     | "/offscreen.html"
     | "/offscreen.js"
+    | "/popup.html"
   type HtmlPublicPath = Extract<PublicPath, `${string}.html`>
   export interface WxtRuntime {
     getURL(path: PublicPath): string;

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Set the title that appears in the manifest and potentially browser UI -->
+    <title>Scarlett Clipper</title>
+    <!-- Link to the CSS file - we'll create this next -->
+    <link rel="stylesheet" href="./style.css" />
+    <!-- Set default icon in wxt.config.ts instead -->
+    <!-- <meta
+      name="manifest.default_icon"
+      content="{
+        16: '/icon/16.png',
+        32: '/icon/32.png',
+        48: '/icon/48.png',
+        128: '/icon/128.png'
+      }"
+    /> -->
+    <!-- Use browser_action (standard toolbar icon) -->
+    <meta name="manifest.type" content="browser_action" />
+  </head>
+  <body>
+    <!-- The root element where our React app will mount -->
+    <div id="root"></div>
+    <!-- Link to the main script -->
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html> 
