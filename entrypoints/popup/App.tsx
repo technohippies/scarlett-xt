@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import browser from 'webextension-polyfill';
+import { Gear } from '@phosphor-icons/react'; // Import the Gear icon
 import { sendMessage } from '../../lib/messaging'; // Relative path from entrypoints/popup to lib
 import PopupDisplay from '../../src/components/presentational/PopupDisplay'; // Import presentational component
 
@@ -82,20 +83,36 @@ function App() {
     }
   };
 
+  // Function to open the settings page
+  const openSettingsPage = () => {
+    browser.runtime.openOptionsPage();
+  };
+
   return (
-    <PopupDisplay
-      pageTitle={pageInfo?.title}
-      pageUrl={pageInfo?.url}
-      status={status}
-      isClipping={isClipping}
-      canClip={canClip}
-      onClip={handleClip}
-      clipButtonText="Save Bookmark" // Match storybook example
-      statusIsError={statusIsError}
-      tagsValue={tagsValue}
-      onTagsChange={handleTagsChange}
-    />
+    <div className="relative p-4 min-w-[300px]"> {/* Add relative positioning and padding */} 
+      {/* Settings Gear Icon Button */} 
+      <button 
+        onClick={openSettingsPage}
+        title="Open Settings"
+        className="absolute top-2 right-2 p-1 text-gray-500 hover:text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+      >
+        <Gear size={20} />
+      </button>
+
+      <PopupDisplay
+        pageTitle={pageInfo?.title}
+        pageUrl={pageInfo?.url}
+        status={status}
+        isClipping={isClipping}
+        canClip={canClip}
+        onClip={handleClip}
+        clipButtonText="Save Bookmark" // Match storybook example
+        statusIsError={statusIsError}
+        tagsValue={tagsValue}
+        onTagsChange={handleTagsChange}
+      />
+    </div> // Close the wrapper div
   );
 }
 
-export default App; // Export App as default 
+export default App; // Export App as default

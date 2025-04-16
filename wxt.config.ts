@@ -28,6 +28,11 @@ export default defineConfig({
         128: "/icon/128.png"
       }
     },
+    // Add the options UI configuration
+    options_ui: {
+      page: "settings.html",
+      open_in_tab: true // Recommended for a welcome/settings page
+    },
     permissions: [
       "storage",
       "offscreen",

@@ -141,5 +141,28 @@ export default defineBackground(() => {
 
   // --- Add other background listeners here (e.g., alarms, other messages) ---
 
+  // --- Listener for install/update events ---
+  browser.runtime.onInstalled.addListener(async (details) => {
+    console.log('[Background] Extension installed or updated:', details.reason);
+
+    if (details.reason === 'install') {
+      console.log('[Background] First installation, opening settings page.');
+      try {
+        await browser.runtime.openOptionsPage(); // Uses the page defined in manifest options_ui
+      } catch (error) {
+        console.error('[Background] Error opening settings page:', error);
+      }
+    } else if (details.reason === 'update') {
+      // Optional: Handle updates, e.g., show notifications or migrate data
+      console.log(`[Background] Updated from ${details.previousVersion} to ${browser.runtime.getManifest().version}`);
+      // Uncomment to open settings on update:
+      // try {
+      //   await browser.runtime.openOptionsPage();
+      // } catch (error) {
+      //  console.error('[Background] Error opening settings page on update:', error);
+      // }
+    }
+  });
+
   console.log('Background script setup complete.');
 }); 
