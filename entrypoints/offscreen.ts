@@ -7,9 +7,12 @@ import browser, { type Runtime } from 'webextension-polyfill'; // Needed for get
 // Import the schema content as a raw string
 import dbSchemaSql from '../utils/dbSchema.sql?raw'; // Use relative path
 
+// Log immediately when the script starts executing
+console.log('[Offscreen Script] Top-level execution start.'); 
+
 // Assume defineUnlistedScript is globally available in this context
 export default defineUnlistedScript(() => {
-  console.log('Offscreen script executing.');
+  console.log('[Offscreen Script] defineUnlistedScript callback executing.');
 
   // Use 'any' for PGlite types with dynamic import
   let db: any = null;
@@ -21,133 +24,115 @@ export default defineUnlistedScript(() => {
   // ---------------------------
 
   async function initDb() {
-    if (db) return db;
-    if (dbReadyPromise) return await dbReadyPromise;
+    // Add logging at the start of initDb
+    console.log('[Offscreen initDb] Called.'); 
+    if (db) {
+      console.log('[Offscreen initDb] DB instance already exists.');
+      return db;
+    }
+    if (dbReadyPromise) {
+      console.log('[Offscreen initDb] Waiting for existing DB ready promise.');
+      return await dbReadyPromise;
+    }
 
-    console.log('Offscreen: Initializing PGlite from /electric-sql/ via dynamic import...');
+    console.log('[Offscreen initDb] Initializing PGlite...');
     dbReadyPromise = (async () => {
       try {
-        // Construct the full URL for the dynamic import
         const pgliteModuleUrl = browser.runtime.getURL('/electric-sql/index.js');
-        console.log(`Offscreen: Dynamically importing PGlite from ${pgliteModuleUrl}`);
-
-        // Dynamically import PGlite class using the full URL
+        console.log(`[Offscreen initDb] Dynamically importing PGlite from ${pgliteModuleUrl}`);
         const pgliteModule = await import(/* @vite-ignore */ pgliteModuleUrl);
         const PGlite = (pgliteModule.PGlite || pgliteModule.default);
-        if (!PGlite) {
-           throw new Error("PGlite class not found in /electric-sql/index.js");
-        }
-        console.log("Dynamically imported PGlite class.");
+        if (!PGlite) throw new Error("PGlite class not found");
+        console.log("[Offscreen initDb] Dynamically imported PGlite class.");
 
-        // Remove dynamic import for pgvector extension
-        // const vectorModule = await import(/* @vite-ignore */ '/electric-sql/vector/index.js');
-        // vectorExtension = (vectorModule.vector || vectorModule.default);
-        // if (!vectorExtension) {
-        //   throw new Error("pgvector extension not found in /electric-sql/vector/index.js");
-        // }
-        // console.log("Dynamically imported pgvector extension.");
-
-        // Instantiate WITHOUT vector extension
         const instance = new PGlite('idb://scarlett-wxt-db');
-        console.log("PGlite instance created, awaiting ready...");
-        
+        console.log("[Offscreen initDb] PGlite instance created, awaiting ready...");
         await instance.ready;
-        console.log('Offscreen: PGlite instance ready.');
+        console.log('[Offscreen initDb] PGlite instance ready.');
 
-        // --- Apply Schema After Ready --- 
-        console.log('Offscreen: Applying database schema...');
+        console.log('[Offscreen initDb] Applying database schema...');
         await instance.exec(dbSchemaSql);
-        console.log('Offscreen: Database schema applied successfully.');
-        // ----------------------------------
-
-        // +++ Add Test Insert/Select +++
-        try {
-          console.log('Offscreen: Executing test INSERT...');
-          const insertResult = await instance.exec("INSERT INTO test_items (name) VALUES ('Test Item 1');");
-          console.log('Offscreen: Test INSERT result:', insertResult);
-
-          console.log('Offscreen: Executing test SELECT...');
-          const selectResult = await instance.query('SELECT * FROM test_items;');
-          console.log('Offscreen: Test SELECT result:', selectResult);
-        } catch (testError) {
-          console.error('Offscreen: Test INSERT/SELECT failed:', testError);
-        }
-        // +++ End Test Insert/Select +++
-
+        console.log('[Offscreen initDb] Database schema applied successfully.');
+        
         db = instance;
+        console.log('[Offscreen initDb] Initialization complete.');
         return db;
       } catch (error) {
-        console.error('Offscreen: PGlite initialization or schema application failed:', error);
-        dbReadyPromise = null;
+        console.error('[Offscreen initDb] PGlite initialization or schema application failed:', error);
+        dbReadyPromise = null; 
         throw error;
       }
     })();
     return await dbReadyPromise;
   }
 
-  // Listener for messages from other extension parts
-  // @ts-ignore - Suppressing persistent type error with async listener
-  browser.runtime.onMessage.addListener(
-    (message: any, sender: Runtime.MessageSender, sendResponse: (response?: any) => void) => {
-    console.log('Offscreen: Received message:', message);
+  // Use NATIVE chrome.runtime.onMessage listener here
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    // Log immediately upon receiving any message via the native listener
+    console.log('[Offscreen Native Listener] Message received (inside addListener):', message);
+
+    // Explicitly log the target property before checking it
+    console.log('[Offscreen Native Listener] Checking message target:', message?.target);
 
     if (message.target !== 'offscreen') {
-      // Not for us, ignore. Return undefined/false implicitly.
-      return; 
+      console.log('[Offscreen Native Listener] Message target is NOT \'offscreen\', returning false.');
+      // Must return false synchronously if not handling the message here
+      return false; 
     }
 
-    // DB Operations: These are asynchronous due to initDb and locks.
+    console.log('[Offscreen Native Listener] Message targeted at offscreen, processing...');
+
     if (message.type === 'exec' || message.type === 'query') {
-      // Need to handle the response asynchronously.
+      // Log before starting async operations
+      console.log(`[Offscreen Native Listener] Handling type: ${message.type}`); 
       navigator.locks.request('pglite_db_lock', async (lock) => {
-          console.log('Offscreen: Acquired DB lock');
+          console.log('[Offscreen Native Listener] Acquired DB lock');
           try {
+              // Log before initializing DB
+              console.log('[Offscreen Native Listener] Calling initDb...');
               const dbInstance = await initDb();
+              // Log after initializing DB
+              console.log('[Offscreen Native Listener] initDb returned, proceeding with DB operation.');
               let result;
               if (message.type === 'exec') {
-                  console.log(`Offscreen: Executing SQL in lock: ${message.sql}`)
-                  result = await dbInstance.exec(message.sql);
+                  console.log(`[Offscreen Native Listener] Executing SQL: ${message.sql}`, message.params);
+                  result = await dbInstance.exec(message.sql, message.params || []); 
               } else { // query
-                  console.log(`Offscreen: Executing Query in lock: ${message.sql}`)
+                  console.log(`[Offscreen Native Listener] Executing Query: ${message.sql}`, message.params);
                   result = await dbInstance.query(message.sql, message.params);
               }
-              console.log('Offscreen: DB operation successful');
+              // Log before sending response
+              console.log('[Offscreen Native Listener] DB operation successful, sending success response.', {data: result});
               sendResponse({ status: 'success', data: result });
           } catch (error: any) {
-              console.error('Offscreen: DB operation failed:', error);
-              // Send error response even if DB op failed within async flow
+              // Log before sending error response
+              console.error('[Offscreen Native Listener] DB operation failed, sending error response:', error);
               sendResponse({ status: 'error', error: error?.message || String(error) });
           } finally {
-               console.log('Offscreen: Releasing DB lock');
+               console.log('[Offscreen Native Listener] Releasing DB lock');
           }
       }).catch(error => {
-          // This catch runs *after* the listener has already returned true.
-          // We should still inform the sender about the lock failure.
-          console.error('Offscreen: Failed to acquire DB lock:', error);
-          // Attempt to send response, might fail if sender context is gone.
+          console.error('[Offscreen Native Listener] Failed to acquire DB lock:', error);
           try {
+              // Log before sending lock error response
+              console.log('[Offscreen Native Listener] Sending lock acquisition error response.');
               sendResponse({ status: 'error', error: `Failed to acquire DB lock: ${error?.message || String(error)}` });
           } catch (sendError) {
-              console.error('Offscreen: Failed to send lock acquisition error response:', sendError);
+              console.error('[Offscreen Native Listener] Failed to send lock acquisition error response:', sendError);
           }
       });
       
-      // IMPORTANT: Return true immediately to indicate async response handling.
       return true; 
-    } 
-    // Removed Embedding Operation case
-    // else if (message.type === 'getEmbedding') { ... } // Removed
-    // Handle unknown message types synchronously
-    else {
-      console.warn('Offscreen: Unknown message type received:', message.type);
+    } else {
+      console.warn('[Offscreen Native Listener] Unknown message type received:', message.type);
       sendResponse({ status: 'error', error: 'Unknown message type' }); 
-      // Return false or undefined implicitly for synchronous handling.
       return false;
     }
   });
 
-  console.log('Offscreen: Message listener attached.');
+  // Log after listener is attached
+  console.log('[Offscreen Script] Native Message listener attached.');
 
-  // Optional: Initialize DB on load, or wait for first message
-  // initDb().catch(e => console.error("Initial DB init failed", e)); 
+  // Optional: Kick off DB init proactively, logging any errors.
+  initDb().catch(e => console.error("[Offscreen Script] Proactive initDb failed:", e)); 
 }); 

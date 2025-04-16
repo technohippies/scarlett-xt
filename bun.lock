@@ -7,12 +7,14 @@
         "@electric-sql/pglite": "^0.2.17",
         "@phosphor-icons/react": "^2.1.7",
         "@radix-ui/react-slot": "^1.2.0",
+        "async-mutex": "^0.5.0",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "react": "^19.1.0",
         "react-dom": "^19.1.0",
         "tailwind-merge": "^3.2.0",
         "tw-animate-css": "^1.2.5",
+        "webextension-polyfill": "^0.12.0",
       },
       "devDependencies": {
         "@chromatic-com/storybook": "^1.9.0",
@@ -26,10 +28,13 @@
         "@storybook/react-vite": "^8.3.3",
         "@storybook/test": "^8.3.3",
         "@tailwindcss/vite": "^4.1.4",
+        "@types/chrome": "^0.0.315",
         "@types/node": "^22.14.1",
         "@types/react": "^18.3.3",
         "@types/react-dom": "^18.3.0",
+        "@types/webextension-polyfill": "^0.12.3",
         "@wxt-dev/module-react": "^1.0.0",
+        "fast-glob": "^3.3.3",
         "storybook": "^8.3.3",
         "tailwindcss": "^4.1.4",
         "typescript": "^5.8.2",
@@ -329,6 +334,8 @@
 
     "@types/babel__traverse": ["@types/babel__traverse@7.20.7", "", { "dependencies": { "@babel/types": "^7.20.7" } }, "sha512-dkO5fhS7+/oos4ciWxyEyjWe48zmG6wbCheo/G2ZnHx4fs3EU6YC6UM8rk56gAjNJ9P3MTH2jo5jb92/K6wbng=="],
 
+    "@types/chrome": ["@types/chrome@0.0.315", "", { "dependencies": { "@types/filesystem": "*", "@types/har-format": "*" } }, "sha512-Oy1dYWkr6BCmgwBtOngLByCHstQ3whltZg7/7lubgIZEYvKobDneqplgc6LKERNRBwckFviV4UU5AZZNUFrJ4A=="],
+
     "@types/doctrine": ["@types/doctrine@0.0.9", "", {}, "sha512-eOIHzCUSH7SMfonMG1LsC2f8vxBFtho6NGBznK41R84YzPuvSBzrhEps33IsQiOW9+VL6NQ9DbjQJznk/S4uRA=="],
 
     "@types/estree": ["@types/estree@1.0.7", "", {}, "sha512-w28IoSUCJpidD/TGviZwwMJckNESJZXFu7NBZ5YJ4mEUnNraUn9Pm8HSZm/jDF1pDWYKspWE7oVphigUPRakIQ=="],
@@ -356,6 +363,8 @@
     "@types/resolve": ["@types/resolve@1.20.6", "", {}, "sha512-A4STmOXPhMUtHH+S6ymgE2GiBSMqf4oTvcQZMcHzokuTLVYzXTB8ttjcgxOVaAp2lGwEdzZ0J+cRbbeevQj1UQ=="],
 
     "@types/uuid": ["@types/uuid@9.0.8", "", {}, "sha512-jg+97EGIcY9AGHJJRaaPVgetKDsrTgbRjQ5Msgjh/DQKEFl0DtyRr/VCOyD1T2R1MNeWPK/u7JoGhlDZnKBAfA=="],
+
+    "@types/webextension-polyfill": ["@types/webextension-polyfill@0.12.3", "", {}, "sha512-F58aDVSeN/MjUGazXo/cPsmR76EvqQhQ1v4x23hFjUX0cfAJYE+JBWwiOGW36/VJGGxoH74sVlRIF3z7SJCKyg=="],
 
     "@types/yauzl": ["@types/yauzl@2.10.3", "", { "dependencies": { "@types/node": "*" } }, "sha512-oJoftv0LSuaDZE3Le4DbKX+KS9G36NzOeSap90UIK0yMA/NhKJhqlSGtNDORNRaIbQfzjXDrQa0ytJ6mNRGz/Q=="],
 
@@ -1276,6 +1285,8 @@
     "wcwidth": ["wcwidth@1.0.1", "", { "dependencies": { "defaults": "^1.0.3" } }, "sha512-XHPEwS0q6TaxcvG85+8EYkbiCux2XtWG2mkc47Ng2A77BQu9+DqIOJldST4HgPkuea7dvKSj5VgX3P1d4rW8Tg=="],
 
     "web-ext-run": ["web-ext-run@0.2.2", "", { "dependencies": { "@babel/runtime": "7.24.7", "@devicefarmer/adbkit": "3.2.6", "bunyan": "1.8.15", "chrome-launcher": "1.1.0", "debounce": "1.2.1", "es6-error": "4.1.1", "firefox-profile": "4.6.0", "fs-extra": "11.2.0", "fx-runner": "1.4.0", "mkdirp": "3.0.1", "multimatch": "6.0.0", "mz": "2.7.0", "node-notifier": "10.0.1", "parse-json": "7.1.1", "promise-toolbox": "0.21.0", "set-value": "4.1.0", "source-map-support": "0.5.21", "strip-bom": "5.0.0", "strip-json-comments": "5.0.1", "tmp": "0.2.3", "update-notifier": "6.0.2", "watchpack": "2.4.1", "ws": "8.18.0", "zip-dir": "2.0.0" } }, "sha512-GD59q5/1wYQJXTHrljMZaBa3cCz+Jj3FMDLYgKyAa34TPcHSuMaGqp7TcLJ66PCe43C3hmbEAZd8QCpAB34eiw=="],
+
+    "webextension-polyfill": ["webextension-polyfill@0.12.0", "", {}, "sha512-97TBmpoWJEE+3nFBQ4VocyCdLKfw54rFaJ6EVQYLBCXqCIpLSZkwGgASpv4oPt9gdKCJ80RJlcmNzNn008Ag6Q=="],
 
     "webpack-virtual-modules": ["webpack-virtual-modules@0.6.2", "", {}, "sha512-66/V2i5hQanC51vBQKPH4aI8NMAcBW59FVBs+rC7eGHupMyfn34q7rZIE+ETlJ+XTevqfUhVVBgSUNSW2flEUQ=="],
 

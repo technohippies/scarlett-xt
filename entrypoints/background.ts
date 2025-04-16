@@ -3,6 +3,43 @@ import { onMessage, sendMessage, setupCentralListener } from '../lib/messaging';
 
 console.log('Background script loaded.');
 
+// --- Offscreen Document Management ---
+const OFFSCREEN_DOCUMENT_PATH = '/offscreen.html'; // Path to your offscreen document HTML
+
+async function hasOffscreenDocument(): Promise<boolean> {
+  // Check if the document is already open.
+  // @ts-ignore - clients is available but may show TS error
+  const existingContexts = await browser.runtime.getContexts({
+    // @ts-ignore - ContextType might be missing OFFSCREEN_DOCUMENT in older types
+    contextTypes: ['OFFSCREEN_DOCUMENT'],
+    documentUrls: [browser.runtime.getURL(OFFSCREEN_DOCUMENT_PATH)] 
+  });
+  return existingContexts.length > 0;
+}
+
+async function setupOffscreenDocument() {
+  if (!(await hasOffscreenDocument())) {
+    console.log('[Background] Creating offscreen document...');
+    // @ts-ignore - browser.offscreen may not be in older types
+    await browser.offscreen.createDocument({
+      url: OFFSCREEN_DOCUMENT_PATH, 
+      // Use a valid reason - LOCAL_STORAGE is common if not using others like AUDIO_PLAYBACK
+      // @ts-ignore - browser.offscreen may not be in older types
+      reasons: [browser.offscreen.Reason.LOCAL_STORAGE], 
+      justification: 'Database operations using PGlite',
+    });
+     console.log('[Background] Offscreen document created.');
+  } else {
+     console.log('[Background] Offscreen document already exists.');
+  }
+}
+
+// Setup offscreen document on background script startup
+// Use a catch block to handle potential errors during initial setup
+setupOffscreenDocument().catch(error => {
+  console.error('[Background] Initial setupOffscreenDocument failed:', error);
+});
+
 // Define the structure of the data expected from the clipper content script
 interface ClipData {
   title: string;
@@ -26,6 +63,21 @@ export default defineBackground(() => {
     if (!title || !url) {
       console.error('Background: Invalid clip data received.');
       return; // Or send an error response
+    }
+
+    // Ensure the offscreen document is running before attempting to send message
+    try {
+      await setupOffscreenDocument();
+    } catch (error) {
+      console.error('[Background] Failed to setup offscreen document:', error);
+      browser.notifications.create(`clip-offscreen-error-${Date.now()}`, {
+          type: 'basic',
+          iconUrl: browser.runtime.getURL('/icon/128.png'),
+          title: 'Clipping Error',
+          message: `Failed to initialize the database service. Error: ${error instanceof Error ? error.message : String(error)}`,
+          priority: 1
+      });
+      return; // Stop processing if offscreen setup failed
     }
 
     // Prepare SQL to insert into the clips table
