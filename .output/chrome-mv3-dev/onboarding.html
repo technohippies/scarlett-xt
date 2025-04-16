@@ -5,11 +5,12 @@
 <script src="http://localhost:3001/@id/virtual:wxt-html-plugins" type="module"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scarlett</title>
-    <!-- The main.tsx script will inject CSS links or styles -->  <script type="module" crossorigin="" src="/chunks/reload-html-CNdshsgu.js"></script>
+    <title>Scarlett Setup</title>
+    <!-- WXT will handle CSS injection -->  <script type="module" crossorigin="" src="/chunks/reload-html-CNdshsgu.js"></script>
 </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="http://localhost:3001/src/entry-helpers/renderRoot.tsx"></script>
+    <!-- Point to the main script for this entrypoint -->
+    <script type="module" src="http://localhost:3001/entrypoints/onboarding/main.tsx"></script> 
   </body>
 </html> 
