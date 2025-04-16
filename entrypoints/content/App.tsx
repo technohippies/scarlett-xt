@@ -1,4 +1,4 @@
-import { Button } from "@/components/Button";
+import { Button } from "../../src/components/ui/button";
 import { useState } from "react";
 
 export default () => {
@@ -8,7 +8,9 @@ export default () => {
   return (
     <div>
       <p>This is React. {count}</p>
-      <Button primary onClick={increment} label="Increment" />
+      <Button variant="default" size="default" onClick={increment}>
+        Increment {count}
+      </Button>
     </div>
   );
 };
