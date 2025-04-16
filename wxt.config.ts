@@ -6,6 +6,7 @@ import path from "node:path";
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
+  // srcDir: 'entrypoints', // Remove this - WXT defaults to ./entrypoints and this might cause path issues
   // modules: ["@wxt-dev/i18n/module"], // Removed the i18n module
   vite: () => ({
     plugins: [tailwindcss()], // Only include tailwind plugin here

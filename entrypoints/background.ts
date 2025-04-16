@@ -35,10 +35,8 @@ async function setupOffscreenDocument() {
 }
 
 // Setup offscreen document on background script startup
-// Use a catch block to handle potential errors during initial setup
-setupOffscreenDocument().catch(error => {
-  console.error('[Background] Initial setupOffscreenDocument failed:', error);
-});
+// MOVED the direct call from here to browser.runtime.onStartup listener below
+// console.log('[Background] Temporarily skipped initial offscreen setup call for testing.');
 
 // Define the structure of the data expected from the clipper popup
 interface ClipData {
@@ -148,6 +146,10 @@ export default defineBackground(() => {
     // Check if the reason for the event is the initial installation
     if (details.reason === 'install') {
       console.log('Performing first-time setup...');
+      // Initialize offscreen document on first install as well
+      setupOffscreenDocument().catch(error => {
+        console.error('[Background] Initial setupOffscreenDocument failed on install:', error);
+      });
 
       // Construct the URL for the onboarding page
       const url = browser.runtime.getURL('onboarding.html');
@@ -168,6 +170,18 @@ export default defineBackground(() => {
       // } catch (error) {
       //  console.error('[Background] Error opening settings page on update:', error);
       // }
+    }
+  });
+
+  // --- Listener for browser startup ---
+  // Use onStartup to ensure the offscreen document is ready when the browser starts
+  browser.runtime.onStartup.addListener(async () => {
+    console.log('[Background] Browser startup detected. Setting up offscreen document...');
+    try {
+      await setupOffscreenDocument();
+      console.log('[Background] Offscreen document setup complete on startup.');
+    } catch (error) {
+      console.error('[Background] setupOffscreenDocument failed on startup:', error);
     }
   });
 

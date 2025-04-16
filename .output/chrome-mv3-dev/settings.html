@@ -10,6 +10,9 @@
 </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="http://localhost:3001/entrypoints/settings/main.tsx"></script>
+    <!-- Load the main.tsx script normally -->
+    <script type="module" src="http://localhost:3001/entrypoints/settings/main.tsx" defer></script>
+    <!-- Call the function attached to window once the script is loaded -->
+    <script src="http://localhost:3001/@id/virtual:wxt-inline-script?V6pdLa_n5oZIF7Nw4BEJN31wxj_HHuohVMBkFFPFywU" type="module"></script>
   </body>
 </html> 

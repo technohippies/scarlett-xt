@@ -8,6 +8,18 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="./main.tsx"></script>
+    <!-- Load the main.tsx script normally -->
+    <script type="module" src="./main.tsx" defer></script>
+    <!-- Call the function attached to window once the script is loaded -->
+    <script>
+      // Using DOMContentLoaded ensures the element exists and the script *should* have run
+      document.addEventListener('DOMContentLoaded', () => {
+        if (typeof window.renderSettingsApp === 'function') {
+          window.renderSettingsApp('root');
+        } else {
+          console.error("renderSettingsApp function not found on window object.");
+        }
+      });
+    </script>
   </body>
 </html> 

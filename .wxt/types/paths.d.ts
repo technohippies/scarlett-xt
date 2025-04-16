@@ -256,6 +256,7 @@ declare module "wxt/browser" {
     | "/images/scarlett-handshake.png"
     | "/images/scarlett-holding-bookmark.png"
     | "/images/scarlett-holding-dress.png"
+    | "/main.js"
     | "/offscreen.html"
     | "/offscreen.js"
     | "/onboarding.html"
