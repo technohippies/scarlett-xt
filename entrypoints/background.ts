@@ -45,6 +45,16 @@ interface ClipData {
   tags?: string[]; // Add optional tags array
 }
 
+// Define the structure for Ollama API response
+interface OllamaTag {
+  name: string;
+  // other properties like modified_at, size, digest etc. are ignored for now
+}
+
+interface OllamaTagsResponse {
+  models: OllamaTag[];
+}
+
 // defineBackground is globally available here thanks to WXT
 export default defineBackground(() => {
   console.log('WXT Background defined');
@@ -136,6 +146,33 @@ export default defineBackground(() => {
         });
     }
   });
+
+  // --- Listener to fetch Ollama models ---
+  onMessage<{ endpoint: string }, { success: boolean; models?: {id: string, name: string}[]; error?: string }>(
+    'getOllamaModels',
+    async (message) => {
+      console.log('Background: Received getOllamaModels message', message.data);
+      const { endpoint } = message.data;
+      if (!endpoint) {
+        return { success: false, error: 'Ollama endpoint not provided.' };
+      }
+
+      try {
+        const response = await fetch(`${endpoint}/api/tags`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch Ollama models: ${response.status} ${response.statusText}`);
+        }
+        const data: OllamaTagsResponse = await response.json();
+        // Transform the response into the Model[] format
+        const models = data.models.map(tag => ({ id: tag.name, name: tag.name }));
+        console.log('Background: Successfully fetched Ollama models:', models);
+        return { success: true, models: models };
+      } catch (error: any) { // Catch any type of error
+        console.error('Background: Error fetching Ollama models:', error);
+        return { success: false, error: error.message || 'Unknown error fetching models.' };
+      }
+    }
+  );
 
   // --- Add other background listeners here (e.g., alarms, other messages) ---
 

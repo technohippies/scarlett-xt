@@ -1,6 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import OnInstallPage from './OnInstallPage'; // Renamed, corresponds to provider selection
 import ModelSelectionPage from './ModelSelectionPage'; // The next step
+// Import the payload type from ModelSelectionPage
+import { type SelectionPayload } from './ModelSelectionPage';
 
 type OnboardingStep = 'provider-selection' | 'model-selection';
 
@@ -8,6 +10,8 @@ function OnboardingRouter() {
   const [currentStep, setCurrentStep] = useState<OnboardingStep>('provider-selection');
   // Store the saved config to pass to the next step
   const [savedConfig, setSavedConfig] = useState<any>(null); 
+  // Store the full selection payload
+  const [modelSelection, setModelSelection] = useState<SelectionPayload | null>(null);
 
   // Callback for OnInstallPage to call when config is saved
   const handleProviderSelected = useCallback((config: any) => {
@@ -16,11 +20,13 @@ function OnboardingRouter() {
     setCurrentStep('model-selection');
   }, []);
 
-  // Callback for ModelSelectionPage to call when model is saved
-  const handleModelSelected = useCallback(() => {
-    console.log("OnboardingRouter: Model selected. Onboarding complete?");
+  // Update callback to accept SelectionPayload
+  const handleModelSelected = useCallback((payload: SelectionPayload) => {
+    console.log("OnboardingRouter: Model selection confirmed:", payload);
+    setModelSelection(payload); // Store the full payload
+    // TODO: Save the payload (chatModel, embeddingModel) to storage
     // TODO: Close tab or navigate elsewhere?
-    // For now, just log.
+    alert(`Chat: ${payload.chatModel}, Embed: ${payload.embeddingModel || 'N/A'}`); // Simple alert for now
   }, []);
 
   // Render the component for the current step

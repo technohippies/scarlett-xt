@@ -122,8 +122,11 @@ export default defineUnlistedScript(() => {
       
       return true; 
     } else {
-      console.warn('[Offscreen Native Listener] Unknown message type received:', message.type);
-      sendResponse({ status: 'error', error: 'Unknown message type' }); 
+      // Ignore message types not meant for the offscreen document
+      console.debug('[Offscreen Native Listener] Ignoring unknown message type:', message.type);
+      // Return false (or undefined) to allow other listeners to potentially handle it.
+      // DO NOT sendResponse here, as it interferes with other listeners.
+      // sendResponse({ status: 'error', error: 'Unknown message type' }); 
       return false;
     }
   });

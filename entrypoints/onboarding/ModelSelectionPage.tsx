@@ -9,17 +9,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../src/components/ui/select";
+import { sendMessage } from '../../lib/messaging';
 
-// Use a distinct avatar for this step
-const avatarSrc = "/images/scarlett-wizard.png"; 
+const avatarSrc = "/images/scarlett-holding-dress.png"; 
 
-// Define types for models (can be refined)
 interface Model {
   id: string;
   name: string;
 }
 
-// OpenRouter free models data 
+// Placeholder data for Ollama embedding models
+const ollamaEmbeddingModels: Model[] = [
+  { id: "bge-m3:latest", name: "BGE M3 (Recommended)" },
+  { id: "nomic-embed-text:latest", name: "Nomic Embed Text" },
+  { id: "snowflake-arctic-embed2:latest", name: "Snowflake Arctic Embed" },
+];
+
+// Placeholder data for OpenRouter models
 const openRouterFreeModels: Model[] = [
   { id: "google/gemma-3-27b-it", name: "Google: Gemma 3 27B" },
   { id: "qwen/qwq-32b", name: "Qwen: QwQ 32B" },
@@ -30,14 +36,13 @@ const openRouterFreeModels: Model[] = [
   { id: "deepseek/deepseek-v3-base", name: "DeepSeek: DeepSeek V3 Base" },
 ];
 
-// Model sorting preferences
+// ... sortModels function remains the same ...
+// Sorting function
 const preferredModelPatterns = [
   /^google\/gemma-3-.*$/i, 
   /^qwen\/qwq-32b/i,        
   /^google\/gemini-2-flash/i, 
 ];
-
-// Sorting function
 const sortModels = (models: Model[]): Model[] => {
   return [...models].sort((a, b) => {
     let aPref = preferredModelPatterns.length;
@@ -53,26 +58,31 @@ const sortModels = (models: Model[]): Model[] => {
   });
 };
 
-// Update props definition
+// Update props definition to include embeddingModelId
+// Export the payload type
+export interface SelectionPayload {
+  chatModel: string;
+  embeddingModel?: string; // Optional for OpenRouter
+}
 interface ModelSelectionPageProps {
-  providerConfig: any; // Config received from router
-  onSelectionConfirmed: (modelId: string) => void; // Callback when done
+  providerConfig: any; 
+  onSelectionConfirmed: (payload: SelectionPayload) => void; // Updated callback type
 }
 
-// Accept props
 const ModelSelectionPage: React.FC<ModelSelectionPageProps> = ({ 
   providerConfig, 
   onSelectionConfirmed 
 }) => {
-  const [models, setModels] = useState<Model[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>("");
+  const [chatModels, setChatModels] = useState<Model[]>([]); // Renamed from models
+  const [embeddingModels, setEmbeddingModels] = useState<Model[]>([]); // New state for embedding models
+  const [selectedChatModel, setSelectedChatModel] = useState<string>(""); // Renamed
+  const [selectedEmbeddingModel, setSelectedEmbeddingModel] = useState<string>(""); // New state
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openRouterTier, setOpenRouterTier] = useState('free'); 
 
   useEffect(() => {
     const loadModels = async () => {
-      // Use providerConfig from props directly
       if (!providerConfig) {
         setError("Provider configuration is missing.");
         setIsLoading(false);
@@ -82,45 +92,97 @@ const ModelSelectionPage: React.FC<ModelSelectionPageProps> = ({
       console.log("ModelSelectionPage received config:", providerConfig);
       setIsLoading(true);
       setError(null);
-      try {
-        // Remove fetching config, use prop
-        // const configResponse = ... 
-        const config = providerConfig;
+      setChatModels([]); // Clear previous models
+      setEmbeddingModels([]); // Clear previous models
+      setSelectedChatModel("");
+      setSelectedEmbeddingModel("");
 
-        // Fetch models based on provider config from props
-        let fetchedModels: Model[] = [];
+      try {
+        const config = providerConfig;
+        let fetchedChatModels: Model[] = [];
+        let fetchedEmbeddingModels: Model[] = [];
+
         if (config.provider === 'openrouter') {
           console.log("Loading OpenRouter models...");
           if (openRouterTier === 'free') {
-             fetchedModels = openRouterFreeModels;
+             fetchedChatModels = openRouterFreeModels;
           } else {
              console.log("Fetching paid models (not implemented yet)");
-             fetchedModels = []; 
+             fetchedChatModels = []; 
           }
+          // OpenRouter doesn't need separate embedding model selection
+          fetchedEmbeddingModels = [];
         } else {
-          // Local provider
+          // Local provider - Fetch both chat and embedding models
           console.log(`Requesting models for local provider: ${config.provider}...`);
-          // Placeholder for sending message
-           const modelsResponse: { success: boolean; models?: any[]; error?: string } = 
+          
+          // Fetch CHAT models (using placeholder)
+          const chatModelsResponse: { success: boolean; models?: any[]; error?: string } = 
               { success: true, models: [{id: 'llama3:latest', name: 'llama3:latest'}, {id: 'gemma:7b', name: 'gemma:7b'}, {id: 'mistral:latest', name: 'mistral:latest'}] }; 
-           console.log("Local models response (placeholder):", modelsResponse);
-           if (!modelsResponse.success || !modelsResponse.models) {
-             throw new Error(modelsResponse.error || `Failed to load models for ${config.provider}.`);
-           }
-           fetchedModels = modelsResponse.models.map((m: any) => ({ id: m.id || m.name, name: m.name || m.id }));
+          if (!chatModelsResponse.success || !chatModelsResponse.models) {
+            throw new Error(chatModelsResponse.error || `Failed to load chat models for ${config.provider}.`);
+          }
+          fetchedChatModels = chatModelsResponse.models.map((m: any) => ({ id: m.id || m.name, name: m.name || m.id }));
+          console.log("Local chat models response (placeholder):", fetchedChatModels);
+
+          // Fetch EMBEDDING models dynamically from background script
+          console.log("Fetching local embedding models from background...");
+          // Use the endpoint from the provider config
+          const endpointToCall = config.endpoint || 'http://localhost:11434'; // Default if not provided
+          const embeddingModelsResponse = await sendMessage('getOllamaModels', { endpoint: endpointToCall });
+          
+          if (!embeddingModelsResponse?.success || !embeddingModelsResponse?.models) {
+            console.error("Failed to fetch embedding models from background:", embeddingModelsResponse?.error);
+            // Set error state but potentially continue without embedding models?
+            // Or throw the error:
+            throw new Error(embeddingModelsResponse?.error || `Failed to fetch embedding models from ${endpointToCall}.`);
+          }
+          fetchedEmbeddingModels = embeddingModelsResponse.models;
+          console.log("Local embedding models response:", fetchedEmbeddingModels);
+          
+          // --- Filter for likely embedding models --- 
+          const embeddingKeywords = ['embed', 'bge', 'minilm', 'paraphrase', 'instructor']; // Add more if needed
+          const likelyEmbeddingModels = fetchedEmbeddingModels.filter(model => {
+            const modelIdLower = model.id.toLowerCase();
+            return embeddingKeywords.some(keyword => modelIdLower.includes(keyword));
+          });
+          console.log("Filtered embedding models:", likelyEmbeddingModels);
+          // Use the filtered list from now on
+          fetchedEmbeddingModels = likelyEmbeddingModels;
+          // ----------------------------------------
         }
 
-        const sortedModels = sortModels(fetchedModels);
-        setModels(sortedModels);
+        // Sort and set chat models
+        const sortedChatModels = sortModels(fetchedChatModels);
+        setChatModels(sortedChatModels);
+        const defaultChatModel =
+          sortedChatModels.find(m => preferredModelPatterns.some(p => p.test(m.id))) ||
+          sortedChatModels[0];
+        setSelectedChatModel(defaultChatModel?.id || "");
 
-        const defaultModel =
-          sortedModels.find(m => preferredModelPatterns.some(p => p.test(m.id))) ||
-          sortedModels[0];
-        
-        if (defaultModel) {
-           setSelectedModel(defaultModel.id);
+        // Sort and set embedding models (if any)
+        if (fetchedEmbeddingModels.length > 0) {
+          // Sort embedding models (e.g., prioritize bge-m3)
+          const sortedEmbeddingModels = [...fetchedEmbeddingModels].sort((a, b) => {
+            const aIsBGE = a.id.includes('bge-m3');
+            const bIsBGE = b.id.includes('bge-m3');
+            if (aIsBGE && !bIsBGE) return -1;
+            if (!aIsBGE && bIsBGE) return 1;
+            // Add other preferences if needed (e.g., nomic)
+            return a.name.localeCompare(b.name);
+          });
+          setEmbeddingModels(sortedEmbeddingModels);
+          
+          // Default to the first model in the sorted list (which will be bge-m3 if present)
+          setSelectedEmbeddingModel(sortedEmbeddingModels[0]?.id || "");
         } else {
-           setSelectedModel("");
+          // Handle case where no embedding models were found/returned
+           setEmbeddingModels([]);
+           setSelectedEmbeddingModel("");
+           if (config.provider !== 'openrouter') {
+             console.warn("No embedding models found for local provider.");
+             // Optionally set an error or notification
+           }
         }
 
       } catch (err: any) {
@@ -132,19 +194,28 @@ const ModelSelectionPage: React.FC<ModelSelectionPageProps> = ({
     };
 
     loadModels();
-  // Depend only on providerConfig prop and tier now
   }, [providerConfig, openRouterTier]); 
 
-  const handleModelSelect = (modelId: string) => {
-    setSelectedModel(modelId);
+  const handleChatModelSelect = (modelId: string) => {
+    setSelectedChatModel(modelId);
   };
 
-  // Rename to avoid conflict, call prop
+  // New handler for embedding model selection
+  const handleEmbeddingModelSelect = (modelId: string) => {
+    setSelectedEmbeddingModel(modelId);
+  };
+
   const handleConfirmClick = async () => {
-    if (!selectedModel) return;
-    console.log("Confirming model selection:", selectedModel);
-    // Call the callback prop passed from the router
-    onSelectionConfirmed(selectedModel);
+    // Check if the necessary model(s) are selected
+    const isLocal = providerConfig?.provider !== 'openrouter';
+    if (!selectedChatModel || (isLocal && !selectedEmbeddingModel)) return;
+    
+    console.log("Confirming model selection:", selectedChatModel, isLocal ? selectedEmbeddingModel : '(N/A)');
+    // Call the callback with both models (embeddingModel is undefined for OpenRouter)
+    onSelectionConfirmed({
+      chatModel: selectedChatModel,
+      embeddingModel: isLocal ? selectedEmbeddingModel : undefined
+    });
   };
 
   return (
@@ -155,9 +226,9 @@ const ModelSelectionPage: React.FC<ModelSelectionPageProps> = ({
           alt="Scarlett Wizard Avatar"
           className="w-48 h-48 mb-6 object-contain"
         />
-        <h1 className="text-3xl font-bold mb-3">Select Your Model</h1>
+        <h1 className="text-3xl font-bold mb-3">Select Your Model(s)</h1>
         <p className="text-base text-muted-foreground mb-8">
-          Choose the {providerConfig?.provider === 'openrouter' ? 'OpenRouter' : (providerConfig?.name || 'local')} model Scarlett should use.
+          Choose the {providerConfig?.provider === 'openrouter' ? 'OpenRouter' : (providerConfig?.name || 'local')} model(s) Scarlett should use.
         </p>
 
         {isLoading ? (
@@ -173,10 +244,11 @@ const ModelSelectionPage: React.FC<ModelSelectionPageProps> = ({
                   <TabsTrigger value="paid" disabled>Paid Models (Soon)</TabsTrigger>
                 </TabsList>
                 <TabsContent value="free" className="mt-4">
+                   <label className="block text-sm font-medium mb-1">Chat Model</label>
                    <ModelSelect 
-                     models={models} 
-                     selectedModel={selectedModel} 
-                     onSelect={handleModelSelect} 
+                     models={chatModels} 
+                     selectedModel={selectedChatModel} 
+                     onSelect={handleChatModelSelect} 
                    />
                 </TabsContent>
                 <TabsContent value="paid" className="mt-4">
@@ -184,26 +256,44 @@ const ModelSelectionPage: React.FC<ModelSelectionPageProps> = ({
                 </TabsContent>
               </Tabs>
             ) : (
-               <ModelSelect 
-                 models={models} 
-                 selectedModel={selectedModel} 
-                 onSelect={handleModelSelect} 
-               />
+              // Local Provider: Show both dropdowns
+              <>
+                <div className="space-y-1">
+                  <label className="block text-sm font-medium">Chat</label>
+                  <ModelSelect 
+                    models={chatModels} 
+                    selectedModel={selectedChatModel} 
+                    onSelect={handleChatModelSelect} 
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-sm font-medium">Embedding</label>
+                  <ModelSelect 
+                    models={embeddingModels} 
+                    selectedModel={selectedEmbeddingModel} 
+                    onSelect={handleEmbeddingModelSelect} 
+                  />
+                </div>
+              </>
             )}
             
-             {selectedModel && (
+             {/* REMOVED redundant selected model display div */}
+             {/* 
+             {selectedChatModel && (
                <div className="text-sm text-muted-foreground p-3 bg-muted rounded-md">
-                 Selected: {models.find(m => m.id === selectedModel)?.name || selectedModel}
+                 Selected Chat: {chatModels.find(m => m.id === selectedChatModel)?.name || selectedChatModel}
                </div>
              )}
+             */}
 
             <Button 
               size="lg"
               onClick={handleConfirmClick}
-              disabled={!selectedModel || isLoading}
+              // Disable if required models aren't selected
+              disabled={isLoading || !selectedChatModel || (providerConfig?.provider !== 'openrouter' && !selectedEmbeddingModel)}
               className="w-full"
             >
-              Confirm Selection
+              Confirm Selection(s)
             </Button>
           </div>
         )}
@@ -212,7 +302,8 @@ const ModelSelectionPage: React.FC<ModelSelectionPageProps> = ({
   );
 };
 
-// Helper component for the Select UI (assuming it's still needed here or imported)
+// ... ModelSelect component remains the same ...
+// Helper component for the Select UI
 interface ModelSelectProps {
   models: Model[];
   selectedModel: string;
@@ -240,4 +331,4 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ models, selectedModel, onSele
   );
 };
 
-export default ModelSelectionPage; 
+export default ModelSelectionPage;
