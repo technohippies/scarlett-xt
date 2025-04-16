@@ -1,0 +1,20 @@
+{
+  "onInstall_title": {
+    "message": "Welcome to Scarlett!"
+  },
+  "onInstall_configurePrompt": {
+    "message": "Please configure your LLM connection."
+  },
+  "onInstall_localTab": {
+    "message": "Local"
+  },
+  "onInstall_onlineTab": {
+    "message": "Online"
+  },
+  "onInstall_detectedStatus": {
+    "message": "Detected"
+  },
+  "onInstall_apiKeyPlaceholder": {
+    "message": "Paste API key..."
+  }
+} 

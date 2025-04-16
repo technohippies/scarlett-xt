@@ -143,15 +143,22 @@ export default defineBackground(() => {
 
   // --- Listener for install/update events ---
   browser.runtime.onInstalled.addListener(async (details) => {
-    console.log('[Background] Extension installed or updated:', details.reason);
+    console.log('Extension installed:', details);
 
+    // Check if the reason for the event is the initial installation
     if (details.reason === 'install') {
-      console.log('[Background] First installation, opening settings page.');
-      try {
-        await browser.runtime.openOptionsPage(); // Uses the page defined in manifest options_ui
-      } catch (error) {
-        console.error('[Background] Error opening settings page:', error);
-      }
+      console.log('Performing first-time setup...');
+
+      // Construct the URL for the oninstall page
+      const url = browser.runtime.getURL('oninstall.html');
+
+      // Open the oninstall page in a new tab
+      await browser.tabs.create({
+        url: url,
+        active: true, // Make the new tab active
+      });
+
+      console.log(`Opened oninstall page: ${url}`);
     } else if (details.reason === 'update') {
       // Optional: Handle updates, e.g., show notifications or migrate data
       console.log(`[Background] Updated from ${details.previousVersion} to ${browser.runtime.getManifest().version}`);

@@ -4,6 +4,8 @@ import "wxt/browser";
 declare module "wxt/browser" {
   export type PublicPath =
     | "/"
+    | "/_locales/en/messages.json"
+    | "/_locales/zh/messages.json"
     | "/background.js"
     | "/electric-sql/_int.tar.gz"
     | "/electric-sql/adminpack.tar.gz"
@@ -255,6 +257,7 @@ declare module "wxt/browser" {
     | "/images/scarlett-holding-bookmark.png"
     | "/offscreen.html"
     | "/offscreen.js"
+    | "/oninstall.html"
     | "/popup.html"
     | "/settings.html"
   type HtmlPublicPath = Extract<PublicPath, `${string}.html`>

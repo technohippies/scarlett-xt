@@ -6,7 +6,7 @@ import path from "node:path";
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
-  // modules: ["@wxt-dev/module-react"], // Removed framework module
+  // modules: ["@wxt-dev/i18n/module"], // Removed the i18n module
   vite: () => ({
     plugins: [tailwindcss()], // Only include tailwind plugin here
     resolve: {
@@ -16,6 +16,11 @@ export default defineConfig({
     },
   }),
   manifest: {
+    default_locale: "en", // Keep default locale
+    // Add the background script definition
+    background: {
+      service_worker: "background.ts",
+    },
     // Define the browser action (popup)
     action: {
       // default_title is often inferred from popup.html <title> by WXT, but can be set explicitly

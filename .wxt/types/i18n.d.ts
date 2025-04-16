@@ -72,8 +72,56 @@ declare module "wxt/browser" {
       substitutions?: string | string[],
       options?: GetMessageOptions,
     ): string;
+    /**
+     * "Welcome to Scarlett!"
+     */
     getMessage(
-      messageName: "@@extension_id" | "@@ui_locale" | "@@bidi_dir" | "@@bidi_reversed_dir" | "@@bidi_start_edge" | "@@bidi_end_edge",
+      messageName: "onInstall_title",
+      substitutions?: string | string[],
+      options?: GetMessageOptions,
+    ): string;
+    /**
+     * "Please configure your LLM connection."
+     */
+    getMessage(
+      messageName: "onInstall_configurePrompt",
+      substitutions?: string | string[],
+      options?: GetMessageOptions,
+    ): string;
+    /**
+     * "Local"
+     */
+    getMessage(
+      messageName: "onInstall_localTab",
+      substitutions?: string | string[],
+      options?: GetMessageOptions,
+    ): string;
+    /**
+     * "Online"
+     */
+    getMessage(
+      messageName: "onInstall_onlineTab",
+      substitutions?: string | string[],
+      options?: GetMessageOptions,
+    ): string;
+    /**
+     * "Detected"
+     */
+    getMessage(
+      messageName: "onInstall_detectedStatus",
+      substitutions?: string | string[],
+      options?: GetMessageOptions,
+    ): string;
+    /**
+     * "Paste API key..."
+     */
+    getMessage(
+      messageName: "onInstall_apiKeyPlaceholder",
+      substitutions?: string | string[],
+      options?: GetMessageOptions,
+    ): string;
+    getMessage(
+      messageName: "@@extension_id" | "@@ui_locale" | "@@bidi_dir" | "@@bidi_reversed_dir" | "@@bidi_start_edge" | "@@bidi_end_edge" | "onInstall_title" | "onInstall_configurePrompt" | "onInstall_localTab" | "onInstall_onlineTab" | "onInstall_detectedStatus" | "onInstall_apiKeyPlaceholder",
       substitutions?: string | string[],
       options?: GetMessageOptions,
     ): string;

@@ -9,6 +9,10 @@
     "96": "icon/96.png",
     "128": "icon/128.png"
   },
+  "default_locale": "en",
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -51,9 +55,6 @@
         "default": "Alt+R"
       }
     }
-  },
-  "background": {
-    "service_worker": "background.js"
   },
   "host_permissions": [
     "http://localhost:3000/*"
