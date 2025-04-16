@@ -1,9 +1,9 @@
 {
   "onInstall_title": {
-    "message": "Welcome to Scarlett!"
+    "message": "Hi! I'm Scarlett!"
   },
   "onInstall_configurePrompt": {
-    "message": "Please configure your LLM connection."
+    "message": "Connect an LLM!"
   },
   "onInstall_localTab": {
     "message": "Local"

@@ -73,7 +73,7 @@ declare module "wxt/browser" {
       options?: GetMessageOptions,
     ): string;
     /**
-     * "Welcome to Scarlett!"
+     * "Hi! I'm Scarlett!"
      */
     getMessage(
       messageName: "onInstall_title",
@@ -81,7 +81,7 @@ declare module "wxt/browser" {
       options?: GetMessageOptions,
     ): string;
     /**
-     * "Please configure your LLM connection."
+     * "Connect an LLM!"
      */
     getMessage(
       messageName: "onInstall_configurePrompt",
