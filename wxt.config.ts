@@ -38,6 +38,12 @@ export default defineConfig({
       page: "settings.html",
       open_in_tab: true // Recommended for a welcome/settings page
     },
+    // Add the new model selection page (can also be accessed directly if needed)
+    // We might change how navigation works later, but define it for now
+    "model-selection": {
+      "page": "model-selection.html",
+      "open_in_tab": true
+    },
     permissions: [
       "storage",
       "offscreen",

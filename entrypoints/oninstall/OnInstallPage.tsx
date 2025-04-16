@@ -59,9 +59,65 @@ function OnInstallPage() {
     setApiKey(event.target.value);
   };
 
-  const handleSaveConfiguration = (provider: string) => {
+  const handleSaveConfiguration = async (provider: string) => {
     console.log(`Saving configuration for ${provider}...`);
-    // TODO: Implement saving logic to PGLite DB
+    let configToSave: any = {};
+    let isOnlineProvider = false;
+
+    if (provider === 'openrouter') {
+      if (!apiKey) {
+        console.error("API Key is missing for OpenRouter");
+        // TODO: Show error to user?
+        return;
+      }
+      configToSave = { provider: 'openrouter', apiKey };
+      isOnlineProvider = true;
+    } else {
+      // provider is the ID of the selected local provider
+      if (!selectedLocalProvider) {
+        console.error("No local provider selected");
+        return;
+      }
+      // Find the config details for the selected provider
+      const providerDetails = localProvidersConfig.find(p => p.id === selectedLocalProvider);
+       if (!providerDetails) {
+         console.error("Selected local provider details not found");
+         return;
+       }
+      configToSave = { 
+          provider: selectedLocalProvider, 
+          endpoint: providerDetails.endpoint, 
+          // We might want to save the specific checkPath too?
+          checkPath: providerDetails.checkPath 
+      };
+    }
+
+    console.log("Config to save:", configToSave);
+
+    try {
+      // TODO: Implement actual message sending to background/offscreen script
+      // Example using browser.runtime.sendMessage
+      // const response = await browser.runtime.sendMessage({
+      //   type: "SAVE_PROVIDER_CONFIG",
+      //   payload: configToSave
+      // });
+
+      // Placeholder for successful save
+      const response = { success: true }; // Assume success for now
+      console.log("Save response (placeholder):", response);
+
+      if (response.success) {
+        console.log("Configuration saved successfully. Navigating...");
+        // Navigate to the model selection page
+        window.location.href = browser.runtime.getURL("model-selection.html");
+      } else {
+        console.error("Failed to save configuration.");
+        // TODO: Show error message to the user
+      }
+    } catch (error) {
+      console.error("Error sending save message:", error);
+      // TODO: Show error message to the user
+    }
   };
 
   return (
