@@ -32,7 +32,7 @@ function App() {
           } else {
              // Non-clippable page: Show empty state, disable clipping, neutral status
              setPageInfo(null); // Clear page info
-             setStatus('Open a web page to save a bookmark.'); 
+             setStatus('No text found'); 
              setCanClip(false); 
              setStatusIsError(false); // Not an error state
           }

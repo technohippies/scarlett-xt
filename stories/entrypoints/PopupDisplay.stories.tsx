@@ -57,7 +57,7 @@ export const CannotClip: Story = {
     canClip: false,
     pageTitle: undefined, // No title when not clippable
     pageUrl: undefined, // No URL when not clippable
-    status: 'Open a web page to save a bookmark.', // Neutral status
+    status: 'No text found', // Neutral status
     statusIsError: false, // Not an error
     tagsValue: '', // Tags empty
   },
