@@ -1,41 +1,46 @@
 body {
-  margin: 0;
-  font-family: sans-serif;
-  width: 250px; /* Adjust width as needed */
-  padding: 10px;
-  background-color: #f4f4f4;
+  margin: 0; /* Keep only essential resets */
+  /* Remove conflicting styles below */
+  /* font-family: sans-serif; */ /* Handled by Tailwind base */
+  /* width: 350px; */       /* Handled by component class w-80 */
+  /* min-width: 320px; */   /* Handled by component class w-80 */
+  /* padding: 10px; */      /* Handled by component class p-4 */
+  /* background-color: #f4f4f4; */ /* Handled by component class bg-background */
 }
 
 #root {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  /* Remove root styles, let component handle layout */
+  /* display: flex; */
+  /* flex-direction: column; */
+  /* gap: 10px; */
 }
 
-button {
+/* Remove default button styles to avoid overriding Tailwind */
+/* button {
   padding: 8px 12px;
   cursor: pointer;
   border: 1px solid #ccc;
   border-radius: 4px;
   background-color: #fff;
-}
+} */
 
-button:hover {
+/* button:hover {
   background-color: #eee;
-}
+} */
 
-button:disabled {
+/* button:disabled {
   cursor: not-allowed;
   opacity: 0.6;
-}
+} */
 
-.status {
+/* Remove status/error styles, handled by component classes */
+/* .status {
   font-size: 0.9em;
   color: #555;
   text-align: center;
-}
+} */
 
-.error {
+/* .error {
   color: red;
   font-weight: bold;
-} 
+} */ 
