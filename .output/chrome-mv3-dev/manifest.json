@@ -37,6 +37,15 @@
     "notifications",
     "scripting"
   ],
+  "optional_host_permissions": [
+    "http://localhost:11434/*",
+    "http://localhost:1234/*",
+    "http://localhost:8080/*",
+    "http://127.0.0.1:*/"
+  ],
+  "optional_permissions": [
+    "history"
+  ],
   "web_accessible_resources": [
     {
       "resources": [
@@ -48,8 +57,8 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval' http://localhost:3001; object-src 'self'; worker-src 'self';",
-    "sandbox": "script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:3001; sandbox allow-scripts allow-forms allow-popups allow-modals; child-src 'self';"
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval' http://localhost:3000; object-src 'self'; worker-src 'self';",
+    "sandbox": "script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:3000; sandbox allow-scripts allow-forms allow-popups allow-modals; child-src 'self';"
   },
   "commands": {
     "wxt:reload-extension": {
@@ -60,6 +69,6 @@
     }
   },
   "host_permissions": [
-    "http://localhost:3001/*"
+    "http://localhost:3000/*"
   ]
 }

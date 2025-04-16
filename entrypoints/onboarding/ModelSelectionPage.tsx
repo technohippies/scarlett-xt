@@ -208,10 +208,92 @@ const ModelSelectionPage: React.FC<ModelSelectionPageProps> = ({
   const handleConfirmClick = async () => {
     // Check if the necessary model(s) are selected
     const isLocal = providerConfig?.provider !== 'openrouter';
-    if (!selectedChatModel || (isLocal && !selectedEmbeddingModel)) return;
-    
+    if (!selectedChatModel || (isLocal && !selectedEmbeddingModel))
+    {
+        setError("Please select both a chat and an embedding model for local providers.");
+        return;
+    } 
+    if (!selectedChatModel && !isLocal) {
+        setError("Please select a chat model for OpenRouter.");
+        return;
+    }
+
+    // Clear previous errors
+    setError(null);
+
+    let requiredPermissions: browser.Permissions.Permissions = { origins: [], permissions: [] };
+    let permissionsToRequest: browser.Permissions.Permissions = { origins: [], permissions: [] };
+
+    // --- Determine Required Host Permission --- 
+    if (isLocal && providerConfig?.endpoint) {
+      try {
+        const url = new URL(providerConfig.endpoint);
+        const requiredOrigin = `${url.protocol}//${url.hostname}:${url.port}/*`;
+        requiredPermissions.origins?.push(requiredOrigin);
+      } catch (urlError: any) {
+        console.error("[Permissions] Invalid endpoint URL for permission check:", providerConfig.endpoint, urlError);
+        setError(`Invalid provider endpoint URL: ${providerConfig.endpoint}`);
+        return; // Stop if URL is invalid
+      }
+    }
+
+    // --- Determine Required Optional Permissions ---
+    // Add history permission requirement
+    requiredPermissions.permissions?.push("history");
+    // Add other optional permissions here if needed later
+
+    // --- Check Which Permissions Are Missing ---
+    if ((requiredPermissions.origins && requiredPermissions.origins.length > 0) || 
+        (requiredPermissions.permissions && requiredPermissions.permissions.length > 0)) 
+    {
+      try {
+        const hasPermissions = await browser.permissions.contains(requiredPermissions);
+        console.log(`[Permissions] Already has all required permissions? ${hasPermissions}`);
+        
+        if (!hasPermissions) {
+            // Figure out *which* specific permissions are missing to request them precisely
+            if (requiredPermissions.origins && requiredPermissions.origins.length > 0) {
+                const hasOrigins = await browser.permissions.contains({ origins: requiredPermissions.origins });
+                if (!hasOrigins) {
+                    permissionsToRequest.origins = requiredPermissions.origins;
+                }
+            }
+            if (requiredPermissions.permissions && requiredPermissions.permissions.length > 0) {
+                const hasPerms = await browser.permissions.contains({ permissions: requiredPermissions.permissions });
+                if (!hasPerms) {
+                    permissionsToRequest.permissions = requiredPermissions.permissions;
+                }
+            }
+
+            // If any permissions are missing, request them
+            if ((permissionsToRequest.origins && permissionsToRequest.origins.length > 0) || 
+                (permissionsToRequest.permissions && permissionsToRequest.permissions.length > 0)) 
+            {
+                console.log(`[Permissions] Requesting missing permissions:`, permissionsToRequest);
+                const granted = await browser.permissions.request(permissionsToRequest);
+                console.log(`[Permissions] Permission request result: ${granted}`);
+                if (!granted) {
+                    // Construct a more informative error message
+                    let deniedPerms: string[] = [];
+                    if (permissionsToRequest.origins) deniedPerms.push(...permissionsToRequest.origins);
+                    if (permissionsToRequest.permissions) deniedPerms.push(...permissionsToRequest.permissions);
+                    setError(`Permission denied for: ${deniedPerms.join(', ')}. Cannot proceed without required permissions.`);
+                    return; // Stop if permissions denied
+                }
+            } else {
+                 console.log("[Permissions] All required permissions were already granted individually."); // Should not happen if contains(all) was false, but good sanity check
+            }
+        }
+      } catch (permError: any) {
+        console.error(`[Permissions] Error checking or requesting permissions:`, permError);
+        setError(`Error handling permissions: ${permError.message}`);
+        return; // Stop on error
+      }
+    }
+    // ---------------------------------------------
+
+    // If we reached here, all necessary permissions are granted
     console.log("Confirming model selection:", selectedChatModel, isLocal ? selectedEmbeddingModel : '(N/A)');
-    // Call the callback with both models (embeddingModel is undefined for OpenRouter)
     onSelectionConfirmed({
       chatModel: selectedChatModel,
       embeddingModel: isLocal ? selectedEmbeddingModel : undefined

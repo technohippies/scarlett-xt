@@ -93,10 +93,14 @@ export default defineUnlistedScript(() => {
               console.log('[Offscreen Native Listener] initDb returned, proceeding with DB operation.');
               let result;
               if (message.type === 'exec') {
-                  console.log(`[Offscreen Native Listener] Executing SQL: ${message.sql}`, message.params);
+                  console.log(`[Offscreen Native Listener] Executing SQL: ${message.sql}`);
+                  console.log(`[Offscreen Native Listener] Params for exec:`, message.params);
+                  console.log(`[Offscreen Native Listener] Type of params:`, typeof message.params, Array.isArray(message.params) ? `Array length: ${message.params.length}` : '');
                   result = await dbInstance.exec(message.sql, message.params || []); 
               } else { // query
-                  console.log(`[Offscreen Native Listener] Executing Query: ${message.sql}`, message.params);
+                  console.log(`[Offscreen Native Listener] Executing Query: ${message.sql}`);
+                  console.log(`[Offscreen Native Listener] Params for query:`, message.params);
+                  console.log(`[Offscreen Native Listener] Type of params:`, typeof message.params, Array.isArray(message.params) ? `Array length: ${message.params.length}` : '');
                   result = await dbInstance.query(message.sql, message.params);
               }
               // Log before sending response

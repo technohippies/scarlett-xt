@@ -60,6 +60,21 @@ export default defineConfig({
       "notifications",
       // Add any other permissions your extension needs back here
     ],
+    // --- Add Optional Host Permissions --- 
+    optional_host_permissions: [
+      // Common local LLM endpoints
+      "http://localhost:11434/*", // Ollama default
+      "http://localhost:1234/*", // LM Studio default
+      "http://localhost:8080/*", // Llama.cpp server default
+      "http://127.0.0.1:*/",     // Allow other loopback ports
+      // Add any other specific local endpoints you might support
+    ],
+    // --- Optional: Add Optional Permissions --- 
+    optional_permissions: [
+      "history",
+    //   "activeTab", // Uncomment if needed later
+    //   "alarms"
+    ],
     web_accessible_resources: [
       {
         resources: ['/electric-sql/*'], // Keep this for PGlite dynamic import

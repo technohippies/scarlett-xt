@@ -10,3 +10,10 @@ CREATE TABLE IF NOT EXISTS clips (
     url TEXT NOT NULL UNIQUE, -- Ensure URLs are unique
     clipped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- Record when it was clipped
 ); 
+
+-- Table for storing user LLM/Provider configuration (single row)
+CREATE TABLE IF NOT EXISTS user_configuration (
+    id INTEGER PRIMARY KEY DEFAULT 1, -- Ensure only one row
+    config_json TEXT NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+); 
