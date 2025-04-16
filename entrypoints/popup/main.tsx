@@ -1,6 +1,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App'; // Import the App component
+// import '@/index.css'; // Revert alias import
+import '../../src/index.css'; // Import global styles/tailwind using relative path
 
 // Find the root element (defined in index.html)
 const rootElement = document.getElementById('root');
