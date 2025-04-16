@@ -4,7 +4,7 @@ import { Button } from '../../../src/components/ui/button'; // Adjust path as ne
 
 // More on how to set up stories at: https://storybook.js.org/docs/writing-stories#default-export
 const meta = {
-  title: 'Components/UI/Button',
+  title: 'UI/Button',
   component: Button,
   parameters: {
     // Optional parameter to center the component in the Canvas.

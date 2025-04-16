@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button } from './ui/button'; // Update import path
 import { Textarea } from './ui/textarea'; // Update import path
-import { CircleNotch } from '@phosphor-icons/react'; // Corrected import for phosphor icons
+import { CircleNotch, Gear, BookmarkSimple } from '@phosphor-icons/react'; // Add BookmarkSimple import
 
 interface PopupDisplayProps {
   pageTitle?: string; // Add pageTitle prop
@@ -15,6 +15,7 @@ interface PopupDisplayProps {
   // Props for tags textarea
   tagsValue?: string;
   onTagsChange?: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  onSettingsClick?: () => void; // Add prop for settings click
 }
 
 // This is a purely presentational component for the clipper popup UI.
@@ -26,21 +27,42 @@ function PopupDisplay({
   isClipping,
   canClip,
   onClip,
-  clipButtonText = 'Clip Current Page',
+  clipButtonText = 'Save', // Changed default text
   statusIsError = false,
   tagsValue = '',
-  onTagsChange = () => {}
+  onTagsChange = () => {},
+  onSettingsClick = () => {} // Add default for settings click
 }: PopupDisplayProps) {
 
   const buttonContent = isClipping 
-    ? <><CircleNotch size={16} className="mr-2 h-4 w-4 animate-spin" /> Saving...</> 
+    ? <CircleNotch size={16} className="h-4 w-4 animate-spin" /> // Just the spinner
     : clipButtonText;
 
   return (
     <div className="p-4 w-80 flex flex-col gap-3 bg-background text-foreground border border-border rounded-lg shadow-md">
+      
+      {/* Header Section */}
+      <div className="flex justify-between items-center mb-2"> {/* Header container */} 
+        <div className="flex items-center gap-1 text-lg font-semibold"> {/* Left side */} 
+          <BookmarkSimple size={20} weight="fill" className="text-primary" />
+          <span>Bookmark</span>
+        </div>
+        {/* Settings Gear Icon Button (Moved to header) */} 
+        {onSettingsClick && ( // Right side
+          <button 
+            onClick={onSettingsClick}
+            title="Open Settings"
+            // Removed absolute positioning, added hover effect
+            className="p-1 text-muted-foreground hover:text-foreground focus:outline-none focus:ring-1 focus:ring-ring rounded"
+          >
+            <Gear size={20} />
+          </button>
+        )}
+      </div>
+
       {/* Title Section */}
       {pageTitle && (
-        <div className="flex items-start gap-2 text-base">
+        <div className="flex items-center gap-2 text-base">
           <span className="font-medium w-16 shrink-0">Title:</span>
           <span className="truncate flex-1" title={pageTitle}>{pageTitle}</span>
         </div>
@@ -48,7 +70,7 @@ function PopupDisplay({
       
       {/* Source Section */}
       {pageUrl && (
-        <div className="flex items-start gap-2 text-base">
+        <div className="flex items-center gap-2 text-base">
           <span className="font-medium w-16 shrink-0">Source:</span>
           <span className="truncate flex-1 text-muted-foreground" title={pageUrl}>{pageUrl}</span> 
         </div>
@@ -73,7 +95,8 @@ function PopupDisplay({
         disabled={!canClip || isClipping} 
         variant="default" 
         size="default"
-        className="w-full mt-2"
+        // Add flex centering classes when clipping
+        className={`w-full mt-2 ${isClipping ? 'flex justify-center items-center' : ''}`}
       >
         {buttonContent}
       </Button>

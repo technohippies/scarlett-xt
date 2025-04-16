@@ -3,7 +3,7 @@ import { fn } from '@storybook/test';
 import { Textarea } from '../../../src/components/ui/textarea'; // Adjust path as needed
 
 const meta = {
-  title: 'Components/UI/Textarea',
+  title: 'UI/Textarea',
   component: Textarea,
   parameters: {
     layout: 'centered',

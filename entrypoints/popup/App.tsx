@@ -26,15 +26,21 @@ function App() {
           // Check if it's a clippable page (http/https)
           if (currentTab.url.startsWith('http://') || currentTab.url.startsWith('https://')) {
              setPageInfo({ title: currentTab.title, url: currentTab.url });
-             setStatus(''); // Clear loading status
+             setStatus(''); // Clear status
              setCanClip(true); // Enable clipping
              setStatusIsError(false);
           } else {
-             setStatus('Cannot clip this type of page (e.g., settings, new tab).');
-             setStatusIsError(true);
+             // Non-clippable page: Show empty state, disable clipping, neutral status
+             setPageInfo(null); // Clear page info
+             setStatus('Open a web page to save a bookmark.'); 
+             setCanClip(false); 
+             setStatusIsError(false); // Not an error state
           }
         } else {
+          // Still treat inability to get info as an error state
+          setPageInfo(null);
           setStatus('Could not get current page information.');
+          setCanClip(false);
           setStatusIsError(true);
         }
       } catch (error) {
@@ -89,16 +95,9 @@ function App() {
   };
 
   return (
-    <div className="relative p-4 min-w-[300px]"> {/* Add relative positioning and padding */} 
-      {/* Settings Gear Icon Button */} 
-      <button 
-        onClick={openSettingsPage}
-        title="Open Settings"
-        className="absolute top-2 right-2 p-1 text-gray-500 hover:text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-      >
-        <Gear size={20} />
-      </button>
-
+    <div className="relative min-w-[300px]"> {/* Only need relative wrapper if App had other elements, can likely be removed */} 
+      {/* Settings Gear Icon Button REMOVED FROM HERE */} 
+      
       <PopupDisplay
         pageTitle={pageInfo?.title}
         pageUrl={pageInfo?.url}
@@ -106,12 +105,13 @@ function App() {
         isClipping={isClipping}
         canClip={canClip}
         onClip={handleClip}
-        clipButtonText="Save Bookmark" // Match storybook example
+        clipButtonText="Save"
         statusIsError={statusIsError}
         tagsValue={tagsValue}
         onTagsChange={handleTagsChange}
+        onSettingsClick={openSettingsPage} // Pass the function down
       />
-    </div> // Close the wrapper div
+    </div> 
   );
 }
 
