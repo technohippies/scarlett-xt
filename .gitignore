@@ -1,1 +1,53 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Node dependencies
 node_modules
+
+# Package manager lockfiles (keep the one you use, ignore others if present)
+# yarn.lock
+# package-lock.json
+bun.lockb # Assuming pnpm is used based on wxt prepare standard
+# pnpm-lock.yaml
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+build-storybook.log
+
+# WXT / Vite build output
+.wxt/
+dist/
+*.vite.js
+*.wxt.js
+
+# Storybook build output
+storybook-static/
+
+# TypeScript cache files
+*.tsbuildinfo
+
+# Operating System files
+.DS_Store
+Thumbs.db
+._*
+
+# IDE settings/metadata
+.idea/
+.vscode/
+*.code-workspace
+
+# Test reports
+coverage/
+.nyc_output/
+
+# Optional sensible ignores
+.eslintcache
+.prettiercache

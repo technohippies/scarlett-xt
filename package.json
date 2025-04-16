@@ -13,7 +13,8 @@
     "compile": "tsc --noEmit",
     "postinstall": "wxt prepare",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "chromatic": "npx chromatic --project-token chpt_f25fb14b55f226d"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.2.17",

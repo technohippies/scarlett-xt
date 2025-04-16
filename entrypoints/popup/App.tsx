@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import browser from 'webextension-polyfill';
 import { Gear } from '@phosphor-icons/react'; // Import the Gear icon
 import { sendMessage } from '../../lib/messaging'; // Relative path from entrypoints/popup to lib
-import PopupDisplay from '../../src/components/presentational/PopupDisplay'; // Import presentational component
+import PopupDisplay from '../../src/components/PopupDisplay'; // Update import path
 
 // This component manages the state and logic for the popup
 function App() {
