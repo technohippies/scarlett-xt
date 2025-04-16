@@ -71,19 +71,17 @@ export default defineUnlistedScript(() => {
     // Log immediately upon receiving any message via the native listener
     console.log('[Offscreen Native Listener] Message received (inside addListener):', message);
 
-    // Explicitly log the target property before checking it
-    console.log('[Offscreen Native Listener] Checking message target:', message?.target);
+    // REMOVED target check - Assume messages arriving here are intended for offscreen
+    // console.log('[Offscreen Native Listener] Checking message target:', message?.target);
+    // if (message.target !== 'offscreen') {
+    //   console.log('[Offscreen Native Listener] Message target is NOT \'offscreen\', returning false.');
+    //   return false; 
+    // }
 
-    if (message.target !== 'offscreen') {
-      console.log('[Offscreen Native Listener] Message target is NOT \'offscreen\', returning false.');
-      // Must return false synchronously if not handling the message here
-      return false; 
-    }
-
-    console.log('[Offscreen Native Listener] Message targeted at offscreen, processing...');
+    // Log that we are processing (since target check is removed)
+    console.log('[Offscreen Native Listener] Processing message...');
 
     if (message.type === 'exec' || message.type === 'query') {
-      // Log before starting async operations
       console.log(`[Offscreen Native Listener] Handling type: ${message.type}`); 
       navigator.locks.request('pglite_db_lock', async (lock) => {
           console.log('[Offscreen Native Listener] Acquired DB lock');

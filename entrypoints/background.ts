@@ -40,10 +40,11 @@ setupOffscreenDocument().catch(error => {
   console.error('[Background] Initial setupOffscreenDocument failed:', error);
 });
 
-// Define the structure of the data expected from the clipper content script
+// Define the structure of the data expected from the clipper popup
 interface ClipData {
   title: string;
   url: string;
+  tags?: string[]; // Add optional tags array
 }
 
 // defineBackground is globally available here thanks to WXT
@@ -54,11 +55,11 @@ export default defineBackground(() => {
   // This allows `onMessage` calls below to work.
   setupCentralListener();
 
-  // --- Listener for clipping requests from content script ---
+  // --- Listener for clipping requests from popup ---
   onMessage<ClipData>('clipPage', async (message) => {
     console.log('Background: Received clipPage message', message.data);
 
-    const { title, url } = message.data;
+    const { title, url, tags } = message.data; // Destructure tags
 
     if (!title || !url) {
       console.error('Background: Invalid clip data received.');
@@ -82,12 +83,13 @@ export default defineBackground(() => {
 
     // Prepare SQL to insert into the clips table
     // Using ON CONFLICT DO NOTHING because the URL is unique
+    // TODO: Update schema/insert if tags need to be saved
     const sql = `
       INSERT INTO clips (title, url)
       VALUES ($1, $2)
       ON CONFLICT (url) DO NOTHING;
     `;
-    const params = [title, url];
+    const params = [title, url]; // Tags are not currently saved
 
     console.log('Background: Sending exec command to offscreen for clipping...');
     try {
@@ -95,7 +97,7 @@ export default defineBackground(() => {
       const response = await sendMessage('exec', 
         {
            // Specify the target for the message (important if offscreen.ts checks it)
-           target: 'offscreen', 
+           // target: 'offscreen', // Removed as offscreen listener doesn't check
            sql: sql, 
            params: params 
         }
@@ -109,7 +111,7 @@ export default defineBackground(() => {
         browser.notifications.create(`clip-success-${Date.now()}`, {
           type: 'basic',
           iconUrl: browser.runtime.getURL('/icon/128.png'), // Ensure icon path is correct
-          title: 'Page Clipped',
+          title: 'Bookmark Saved', // Updated title
           message: `Saved: ${title}`,
           priority: 0
         });
@@ -119,7 +121,7 @@ export default defineBackground(() => {
          browser.notifications.create(`clip-error-${Date.now()}`, {
           type: 'basic',
           iconUrl: browser.runtime.getURL('/icon/128.png'),
-          title: 'Clipping Failed',
+          title: 'Bookmark Saving Failed', // Updated title
           message: `Could not save ${title}. Error: ${response?.error || 'Unknown reason'}`,
           priority: 1
         });
@@ -130,7 +132,7 @@ export default defineBackground(() => {
        browser.notifications.create(`clip-comm-error-${Date.now()}`, {
           type: 'basic',
           iconUrl: browser.runtime.getURL('/icon/128.png'),
-          title: 'Clipping Error',
+          title: 'Bookmark Saving Error', // Updated title
           message: `Failed to communicate with the database service. Is the offscreen document running?`,
           priority: 1
         });

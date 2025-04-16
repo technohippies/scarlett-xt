@@ -76,7 +76,7 @@ async function sendMessageToOffscreen<T = any>(message: any): Promise<T> {
   // Use native chrome.runtime.sendMessage for offscreen communication.
   const response: { status?: string; error?: string; data?: T } = 
     await chrome.runtime.sendMessage({ 
-      target: 'offscreen', // Add target for the listener in offscreen.ts
+      // target: 'offscreen', // No longer needed as offscreen listener doesn't check
       ...message,
     });
 

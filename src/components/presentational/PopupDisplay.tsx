@@ -1,6 +1,7 @@
 import React from 'react';
 import { Button } from '../ui/button'; // Assuming Button is here
 import { Textarea } from '../ui/textarea'; // Import the Textarea
+import { CircleNotch } from '@phosphor-icons/react'; // Corrected import for phosphor icons
 
 interface PopupDisplayProps {
   pageTitle?: string; // Add pageTitle prop
@@ -31,13 +32,15 @@ function PopupDisplay({
   onTagsChange = () => {}
 }: PopupDisplayProps) {
 
-  const buttonLabel = isClipping ? 'Clipping...' : clipButtonText;
+  const buttonContent = isClipping 
+    ? <><CircleNotch size={16} className="mr-2 h-4 w-4 animate-spin" /> Saving...</> 
+    : clipButtonText;
 
   return (
-    <div className="p-4 w-80 flex flex-col gap-3 bg-background text-foreground border border-border rounded-lg shadow-md text-sm">
+    <div className="p-4 w-80 flex flex-col gap-3 bg-background text-foreground border border-border rounded-lg shadow-md">
       {/* Title Section */}
       {pageTitle && (
-        <div className="flex items-start gap-2">
+        <div className="flex items-start gap-2 text-base">
           <span className="font-medium w-16 shrink-0">Title:</span>
           <span className="truncate flex-1" title={pageTitle}>{pageTitle}</span>
         </div>
@@ -45,22 +48,22 @@ function PopupDisplay({
       
       {/* Source Section */}
       {pageUrl && (
-        <div className="flex items-start gap-2">
+        <div className="flex items-start gap-2 text-base">
           <span className="font-medium w-16 shrink-0">Source:</span>
           <span className="truncate flex-1 text-muted-foreground" title={pageUrl}>{pageUrl}</span> 
         </div>
       )}
 
       {/* Tags Section */}
-      <div className="flex items-start gap-2">
-        <label htmlFor="tags-textarea" className="font-medium w-16 shrink-0 pt-1.5">Tags:</label> {/* Added pt-1.5 for alignment */}
+      <div className="flex items-center gap-2 text-base">
+        <label htmlFor="tags-textarea" className="font-medium w-16 shrink-0">Tags:</label>
         <Textarea 
           id="tags-textarea"
-          placeholder="comma-separated..." 
+          placeholder="" 
           value={tagsValue} 
           onChange={onTagsChange}
-          className="resize-none flex-1 min-h-[40px]" // Adjusted min-height
-          rows={1} // Start with 1 row
+          className="resize-none flex-1 min-h-[40px]"
+          rows={1}
         />
       </div>
 
@@ -70,13 +73,13 @@ function PopupDisplay({
         disabled={!canClip || isClipping} 
         variant="default" 
         size="default"
-        className="w-full mt-2" // Add margin-top
+        className="w-full mt-2"
       >
-        {buttonLabel}
+        {buttonContent}
       </Button>
 
       {/* Status Message */}
-      {status && (
+      {status && !isClipping && (
         <div 
           className={`text-xs text-center mt-1 ${statusIsError ? 'text-destructive' : 'text-muted-foreground'}`}
         >
