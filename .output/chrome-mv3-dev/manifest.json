@@ -9,6 +9,34 @@
     "96": "icon/96.png",
     "128": "icon/128.png"
   },
+  "permissions": [
+    "storage",
+    "offscreen",
+    "tabs",
+    "scripting"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "/electric-sql/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    },
+    {
+      "resources": [
+        "content-scripts/content.css"
+      ],
+      "matches": [
+        "*://*/*"
+      ]
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval' http://localhost:3000; object-src 'self'; worker-src 'self';",
+    "sandbox": "script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:3000; sandbox allow-scripts allow-forms allow-popups allow-modals; child-src 'self';"
+  },
   "commands": {
     "wxt:reload-extension": {
       "description": "Reload the extension during development",
@@ -23,23 +51,5 @@
   "host_permissions": [
     "*://*/*",
     "http://localhost:3000/*"
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "content-scripts/content.css"
-      ],
-      "matches": [
-        "*://*/*"
-      ]
-    }
-  ],
-  "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval' http://localhost:3000; object-src 'self';",
-    "sandbox": "script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:3000; sandbox allow-scripts allow-forms allow-popups allow-modals; child-src 'self';"
-  },
-  "permissions": [
-    "tabs",
-    "scripting"
   ]
 }
