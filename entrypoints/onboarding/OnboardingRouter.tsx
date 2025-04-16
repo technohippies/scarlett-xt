@@ -6,6 +6,7 @@ import ModelSelectionPage from './ModelSelectionPage'; // The next step
 import { type SelectionPayload } from './ModelSelectionPage';
 // Import the database utility
 import { execDb } from '../../utils/db';
+import { queryDb } from '../../utils/db';
 
 type OnboardingStep = 'provider-selection' | 'model-selection' | 'complete'; // Add complete step
 
@@ -38,15 +39,32 @@ function OnboardingRouter() {
 
     try {
       const configJson = JSON.stringify(fullConfig);
+
+      // WORKAROUND: Parameterized UPDATE seems broken in PGlite/Offscreen.
+      // Manually interpolate the JSON string. Use with caution!
+      // Escape single quotes within the JSON string just in case.
+      const escapedConfigJson = configJson.replace(/'/g, "''"); 
       const sql = `
-        INSERT INTO user_configuration (id, config_json, updated_at)
-        VALUES (1, $1, CURRENT_TIMESTAMP)
-        ON CONFLICT (id) DO UPDATE SET 
-            config_json = EXCLUDED.config_json,
-            updated_at = CURRENT_TIMESTAMP;
+        UPDATE user_configuration
+        SET config_json = '${escapedConfigJson}' 
+        WHERE id = 1;
       `;
-      await execDb(sql, [configJson]);
-      console.log("OnboardingRouter: Configuration saved successfully.");
+
+      // Use execDb with the interpolated SQL (no parameters)
+      const result = await execDb(sql); // No params array needed
+      console.log('DB Update Result (execDb, interpolated):', result);
+
+      // Check rowsModified from execDb result
+      let needsInsert = result?.rowsModified === 0;
+
+      if (needsInsert) { // Use the new flag
+        console.log('User configuration row likely not updated, attempting INSERT...');
+        // INSERT can still use parameters, as it seems less problematic
+        const insertSql = `INSERT INTO user_configuration (id, config_json, updated_at) VALUES (1, ?, CURRENT_TIMESTAMP);`;
+        await execDb(insertSql, [configJson]); // Use params for INSERT
+      }
+
+      console.log("OnboardingRouter: Configuration saved successfully (using interpolated UPDATE/param INSERT attempt).");
 
       // Optional: Move to a simple complete step before closing?
       // setCurrentStep('complete'); 
