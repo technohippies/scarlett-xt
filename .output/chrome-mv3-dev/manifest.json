@@ -27,10 +27,6 @@
     "page": "settings.html",
     "open_in_tab": true
   },
-  "model-selection": {
-    "page": "model-selection.html",
-    "open_in_tab": true
-  },
   "permissions": [
     "storage",
     "offscreen",

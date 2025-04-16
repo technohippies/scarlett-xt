@@ -149,16 +149,16 @@ export default defineBackground(() => {
     if (details.reason === 'install') {
       console.log('Performing first-time setup...');
 
-      // Construct the URL for the oninstall page
-      const url = browser.runtime.getURL('oninstall.html');
+      // Construct the URL for the onboarding page
+      const url = browser.runtime.getURL('onboarding.html');
 
-      // Open the oninstall page in a new tab
+      // Open the onboarding page in a new tab
       await browser.tabs.create({
         url: url,
-        active: true, // Make the new tab active
+        active: true,
       });
 
-      console.log(`Opened oninstall page: ${url}`);
+      console.log(`Opened onboarding page: ${url}`);
     } else if (details.reason === 'update') {
       // Optional: Handle updates, e.g., show notifications or migrate data
       console.log(`[Background] Updated from ${details.previousVersion} to ${browser.runtime.getManifest().version}`);

@@ -256,10 +256,9 @@ declare module "wxt/browser" {
     | "/images/scarlett-handshake.png"
     | "/images/scarlett-holding-bookmark.png"
     | "/images/scarlett-holding-dress.png"
-    | "/model-selection.html"
     | "/offscreen.html"
     | "/offscreen.js"
-    | "/oninstall.html"
+    | "/onboarding.html"
     | "/popup.html"
     | "/settings.html"
   type HtmlPublicPath = Extract<PublicPath, `${string}.html`>

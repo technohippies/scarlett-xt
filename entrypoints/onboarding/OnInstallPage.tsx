@@ -24,7 +24,13 @@ const Spinner = () => (
   </svg>
 );
 
-function OnInstallPage() {
+// Add onConfigSaved prop definition
+interface OnInstallPageProps {
+  onConfigSaved: (config: any) => void;
+}
+
+// Use React.FC for props typing
+const OnInstallPage: React.FC<OnInstallPageProps> = ({ onConfigSaved }) => {
   const { t } = useTranslation();
   // Get status and providers list from the hook
   const { statuses: localProviderStatuses, providers } = useProviderStatus(); 
@@ -33,6 +39,10 @@ function OnInstallPage() {
   const [apiKey, setApiKey] = useState('');
   // Auto-selection logic now lives here, watching the statuses from the hook
   const [autoSelected, setAutoSelected] = useState(false); 
+  // Add loading state for the save button
+  const [isSaving, setIsSaving] = useState(false);
+  // Add error state for saving
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (autoSelected || selectedLocalProvider) return; // Don't auto-select if already selected manually or automatically
@@ -60,14 +70,18 @@ function OnInstallPage() {
   };
 
   const handleSaveConfiguration = async (provider: string) => {
-    console.log(`Saving configuration for ${provider}...`);
+    console.log(`Preparing to save configuration for ${provider}...`);
+    setIsSaving(true);
+    setSaveError(null);
+
     let configToSave: any = {};
     let isOnlineProvider = false;
 
     if (provider === 'openrouter') {
       if (!apiKey) {
         console.error("API Key is missing for OpenRouter");
-        // TODO: Show error to user?
+        setSaveError("Please enter your OpenRouter API key.");
+        setIsSaving(false);
         return;
       }
       configToSave = { provider: 'openrouter', apiKey };
@@ -76,12 +90,16 @@ function OnInstallPage() {
       // provider is the ID of the selected local provider
       if (!selectedLocalProvider) {
         console.error("No local provider selected");
+        setSaveError("Please select a local provider.");
+        setIsSaving(false);
         return;
       }
       // Find the config details for the selected provider
       const providerDetails = localProvidersConfig.find(p => p.id === selectedLocalProvider);
        if (!providerDetails) {
          console.error("Selected local provider details not found");
+         setSaveError("Internal error: Provider details not found.");
+         setIsSaving(false);
          return;
        }
       configToSave = { 
@@ -92,7 +110,7 @@ function OnInstallPage() {
       };
     }
 
-    console.log("Config to save:", configToSave);
+    console.log("Attempting to save config:", configToSave);
 
     try {
       // TODO: Implement actual message sending to background/offscreen script
@@ -107,16 +125,19 @@ function OnInstallPage() {
       console.log("Save response (placeholder):", response);
 
       if (response.success) {
-        console.log("Configuration saved successfully. Navigating...");
-        // Navigate to the model selection page
-        window.location.href = browser.runtime.getURL("model-selection.html");
+        console.log("Configuration saved successfully via background. Calling onConfigSaved...");
+        // Call the callback prop instead of navigating
+        onConfigSaved(configToSave); 
       } else {
-        console.error("Failed to save configuration.");
-        // TODO: Show error message to the user
+        console.error("Failed to save configuration via background.");
+        // setSaveError(response.error || "Failed to save configuration.");
+        setSaveError("Failed to save configuration."); // Placeholder error
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error sending save message:", error);
-      // TODO: Show error message to the user
+      setSaveError(error.message || "An unknown error occurred while saving.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -192,12 +213,12 @@ function OnInstallPage() {
             <Button
               size="lg"
               className="w-full mt-6"
-              // Read status from hook state for the selected provider
-              disabled={!selectedLocalProvider || localProviderStatuses[selectedLocalProvider] !== 'connected'} 
+              disabled={!selectedLocalProvider || localProviderStatuses[selectedLocalProvider] !== 'connected' || isSaving}
               onClick={() => handleSaveConfiguration(selectedLocalProvider!)}
             >
-              Connect 
+              {isSaving ? "Connecting..." : "Connect"}
             </Button>
+            {saveError && <p className="text-red-500 text-sm mt-2 text-center">{saveError}</p>} {/* Show save error */}
           </TabsContent>
 
           <TabsContent value="online" className="mt-6"> {/* Increased margin */}
@@ -223,11 +244,12 @@ function OnInstallPage() {
             <Button
               size="lg" // Use large button size
               className="w-full mt-6" // Increased margin
-              disabled={!apiKey}
+              disabled={!apiKey || isSaving}
               onClick={() => handleSaveConfiguration('openrouter')}
             >
-               Connect
+               {isSaving ? "Connecting..." : "Connect"}
             </Button>
+            {saveError && <p className="text-red-500 text-sm mt-2 text-center">{saveError}</p>} {/* Show save error */}
           </TabsContent>
         </Tabs>
       </div>

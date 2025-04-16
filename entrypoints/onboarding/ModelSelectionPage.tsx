@@ -10,17 +10,16 @@ import {
   SelectValue,
 } from "../../src/components/ui/select";
 
-// Placeholder - Replace with a different image path if desired
+// Use a distinct avatar for this step
 const avatarSrc = "/images/scarlett-wizard.png"; 
 
 // Define types for models (can be refined)
 interface Model {
   id: string;
-  name: string; // Often the same as id for local models
-  // Add other properties if needed (e.g., size, provider)
+  name: string;
 }
 
-// OpenRouter free models data (as provided)
+// OpenRouter free models data 
 const openRouterFreeModels: Model[] = [
   { id: "google/gemma-3-27b-it", name: "Google: Gemma 3 27B" },
   { id: "qwen/qwq-32b", name: "Qwen: QwQ 32B" },
@@ -33,9 +32,9 @@ const openRouterFreeModels: Model[] = [
 
 // Model sorting preferences
 const preferredModelPatterns = [
-  /^google\/gemma-3-.*$/i, // Gemma 3 (any size)
-  /^qwen\/qwq-32b/i,        // Qwen QwQ 32B
-  /^google\/gemini-2-flash/i, // Gemini 2 Flash
+  /^google\/gemma-3-.*$/i, 
+  /^qwen\/qwq-32b/i,        
+  /^google\/gemini-2-flash/i, 
 ];
 
 // Sorting function
@@ -43,143 +42,109 @@ const sortModels = (models: Model[]): Model[] => {
   return [...models].sort((a, b) => {
     let aPref = preferredModelPatterns.length;
     let bPref = preferredModelPatterns.length;
-
     for (let i = 0; i < preferredModelPatterns.length; i++) {
-      if (preferredModelPatterns[i].test(a.id)) {
-        aPref = i;
-        break;
-      }
+      if (preferredModelPatterns[i].test(a.id)) { aPref = i; break; }
     }
     for (let i = 0; i < preferredModelPatterns.length; i++) {
-      if (preferredModelPatterns[i].test(b.id)) {
-        bPref = i;
-        break;
-      }
+      if (preferredModelPatterns[i].test(b.id)) { bPref = i; break; }
     }
-
-    if (aPref !== bPref) {
-      return aPref - bPref; // Lower preference index comes first
-    }
-
-    // If preference is the same, sort alphabetically by name
+    if (aPref !== bPref) return aPref - bPref;
     return (a.name || a.id).localeCompare(b.name || b.id);
   });
 };
 
-function ModelSelectionPage() {
-  // TODO: Define providerConfig type more strictly if needed
-  const [providerConfig, setProviderConfig] = useState<any>(null);
+// Update props definition
+interface ModelSelectionPageProps {
+  providerConfig: any; // Config received from router
+  onSelectionConfirmed: (modelId: string) => void; // Callback when done
+}
+
+// Accept props
+const ModelSelectionPage: React.FC<ModelSelectionPageProps> = ({ 
+  providerConfig, 
+  onSelectionConfirmed 
+}) => {
   const [models, setModels] = useState<Model[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>(""); // Use empty string for Select initial
+  const [selectedModel, setSelectedModel] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [openRouterTier, setOpenRouterTier] = useState('free'); // For OpenRouter tabs
+  const [openRouterTier, setOpenRouterTier] = useState('free'); 
 
   useEffect(() => {
-    const loadData = async () => {
+    const loadModels = async () => {
+      // Use providerConfig from props directly
+      if (!providerConfig) {
+        setError("Provider configuration is missing.");
+        setIsLoading(false);
+        return;
+      }
+
+      console.log("ModelSelectionPage received config:", providerConfig);
       setIsLoading(true);
       setError(null);
       try {
-        // 1. Get saved provider config
-        console.log("Requesting provider config...");
-        // Placeholder response - adjust type as needed for real implementation
-        const configResponse: { success: boolean; config?: any; error?: string } = 
-          { success: true, config: { provider: 'ollama', endpoint: 'http://localhost:11434', checkPath: '/api/tags' } }; 
-        console.log("Config response (placeholder):", configResponse);
+        // Remove fetching config, use prop
+        // const configResponse = ... 
+        const config = providerConfig;
 
-        if (!configResponse.success || !configResponse.config) {
-          // Use the error field if it exists, otherwise a default message
-          throw new Error(configResponse.error || "Failed to load provider configuration.");
-        }
-        setProviderConfig(configResponse.config);
-        const config = configResponse.config;
-
-        // 2. Get models based on provider
+        // Fetch models based on provider config from props
         let fetchedModels: Model[] = [];
         if (config.provider === 'openrouter') {
-          console.log("Provider is OpenRouter, loading models...");
-          // For now, just load free models. TODO: Add logic for paid tier.
-           if (openRouterTier === 'free') {
+          console.log("Loading OpenRouter models...");
+          if (openRouterTier === 'free') {
              fetchedModels = openRouterFreeModels;
-           } else {
-             // Placeholder for fetching paid models
+          } else {
              console.log("Fetching paid models (not implemented yet)");
              fetchedModels = []; 
-           }
+          }
         } else {
           // Local provider
-          console.log(`Provider is ${config.provider}, requesting local models...`);
-          // Placeholder response - adjust type as needed
-          const modelsResponse: { success: boolean; models?: any[]; error?: string } = 
-             { success: true, models: [{id: 'llama3:latest', name: 'llama3:latest'}, {id: 'gemma:7b', name: 'gemma:7b'}, {id: 'mistral:latest', name: 'mistral:latest'}] }; 
-          console.log("Models response (placeholder):", modelsResponse);
-          
-          if (!modelsResponse.success || !modelsResponse.models) {
-            // Use error field if it exists
-            throw new Error(modelsResponse.error || `Failed to load models for ${config.provider}.`);
-          }
-          fetchedModels = modelsResponse.models.map((m: any) => ({ id: m.id || m.name, name: m.name || m.id }));
+          console.log(`Requesting models for local provider: ${config.provider}...`);
+          // Placeholder for sending message
+           const modelsResponse: { success: boolean; models?: any[]; error?: string } = 
+              { success: true, models: [{id: 'llama3:latest', name: 'llama3:latest'}, {id: 'gemma:7b', name: 'gemma:7b'}, {id: 'mistral:latest', name: 'mistral:latest'}] }; 
+           console.log("Local models response (placeholder):", modelsResponse);
+           if (!modelsResponse.success || !modelsResponse.models) {
+             throw new Error(modelsResponse.error || `Failed to load models for ${config.provider}.`);
+           }
+           fetchedModels = modelsResponse.models.map((m: any) => ({ id: m.id || m.name, name: m.name || m.id }));
         }
 
-        // 3. Sort models
         const sortedModels = sortModels(fetchedModels);
         setModels(sortedModels);
 
-        // 4. Set default selection (first preferred model found, or first model otherwise)
-        const defaultModel = 
+        const defaultModel =
           sortedModels.find(m => preferredModelPatterns.some(p => p.test(m.id))) ||
           sortedModels[0];
         
         if (defaultModel) {
-           console.log("Setting default model selection:", defaultModel.id);
            setSelectedModel(defaultModel.id);
         } else {
-           console.log("No models found to set default selection.");
            setSelectedModel("");
         }
 
       } catch (err: any) {
-        console.error("Error loading data:", err);
+        console.error("Error loading models:", err);
         setError(err.message || "An unknown error occurred.");
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadData();
-  }, [openRouterTier]); // Re-fetch if OpenRouter tier changes
+    loadModels();
+  // Depend only on providerConfig prop and tier now
+  }, [providerConfig, openRouterTier]); 
 
   const handleModelSelect = (modelId: string) => {
-    console.log("Model selected via Select:", modelId);
     setSelectedModel(modelId);
   };
 
-  const handleConfirmSelection = async () => {
+  // Rename to avoid conflict, call prop
+  const handleConfirmClick = async () => {
     if (!selectedModel) return;
-    console.log("Saving selected model:", selectedModel);
-    setIsLoading(true); // Show loading state on button?
-    setError(null);
-    try {
-       // Placeholder response - adjust type
-       const response: { success: boolean; error?: string } = { success: true }; 
-       console.log("Save model response (placeholder):", response);
-
-       if (response.success) {
-         console.log("Model selection saved.");
-         // TODO: Navigate to the final step or close the onboarding tab.
-         // Example: Close the current tab
-          browser.tabs.getCurrent().then(tab => {
-            if (tab?.id) browser.tabs.remove(tab.id);
-          });
-       } else {
-          // Use error field
-          throw new Error(response.error || "Failed to save model selection.");
-       }
-     } catch (err: any) {
-        console.error("Error saving model:", err);
-        setError(err.message || "An unknown error occurred while saving.");
-        setIsLoading(false);
-     }
+    console.log("Confirming model selection:", selectedModel);
+    // Call the callback prop passed from the router
+    onSelectionConfirmed(selectedModel);
   };
 
   return (
@@ -187,16 +152,16 @@ function ModelSelectionPage() {
       <div className="container mx-auto p-8 max-w-2xl flex flex-col items-center bg-card text-card-foreground rounded-lg shadow-lg">
         <img
           src={avatarSrc}
-          alt="Scarlett Avatar"
+          alt="Scarlett Wizard Avatar"
           className="w-48 h-48 mb-6 object-contain"
         />
         <h1 className="text-3xl font-bold mb-3">Select Your Model</h1>
         <p className="text-base text-muted-foreground mb-8">
-          Choose the model you want Scarlett to use.
+          Choose the {providerConfig?.provider === 'openrouter' ? 'OpenRouter' : (providerConfig?.name || 'local')} model Scarlett should use.
         </p>
 
         {isLoading ? (
-          <p>Loading...</p> // Simple loading indicator
+          <p>Loading...</p> 
         ) : error ? (
           <p className="text-red-500">Error: {error}</p>
         ) : (
@@ -205,10 +170,9 @@ function ModelSelectionPage() {
               <Tabs value={openRouterTier} onValueChange={setOpenRouterTier} className="w-full">
                 <TabsList className="grid w-full grid-cols-2">
                   <TabsTrigger value="free">Free Models</TabsTrigger>
-                  <TabsTrigger value="paid" disabled>Paid Models (Soon)</TabsTrigger> {/* Placeholder for paid */}
+                  <TabsTrigger value="paid" disabled>Paid Models (Soon)</TabsTrigger>
                 </TabsList>
                 <TabsContent value="free" className="mt-4">
-                  {/* Model Select Component */} 
                    <ModelSelect 
                      models={models} 
                      selectedModel={selectedModel} 
@@ -220,7 +184,6 @@ function ModelSelectionPage() {
                 </TabsContent>
               </Tabs>
             ) : (
-               /* Model Select Component for Local */
                <ModelSelect 
                  models={models} 
                  selectedModel={selectedModel} 
@@ -228,7 +191,6 @@ function ModelSelectionPage() {
                />
             )}
             
-             {/* Display selected model details? */} 
              {selectedModel && (
                <div className="text-sm text-muted-foreground p-3 bg-muted rounded-md">
                  Selected: {models.find(m => m.id === selectedModel)?.name || selectedModel}
@@ -237,7 +199,7 @@ function ModelSelectionPage() {
 
             <Button 
               size="lg"
-              onClick={handleConfirmSelection}
+              onClick={handleConfirmClick}
               disabled={!selectedModel || isLoading}
               className="w-full"
             >
@@ -248,9 +210,9 @@ function ModelSelectionPage() {
       </div>
     </div>
   );
-}
+};
 
-// Helper component for the Select UI
+// Helper component for the Select UI (assuming it's still needed here or imported)
 interface ModelSelectProps {
   models: Model[];
   selectedModel: string;
