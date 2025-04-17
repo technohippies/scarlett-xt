@@ -1,260 +1,205 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState } from 'react';
 import browser from 'webextension-polyfill';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../src/components/ui/tabs';
-import { ToggleGroup, ToggleGroupItem } from '../../src/components/ui/toggle-group';
-import { InputWithIcon } from '../../src/components/ui/input-with-icon';
 import { Button } from '../../src/components/ui/button';
-import { Key } from '@phosphor-icons/react';
-import { cn } from '../../lib/utils';
-// Import the hook and related types/configs
-import { useProviderStatus, localProvidersConfig, LocalStatus } from '../../src/hooks/useProviderStatus'; 
+import { Input } from '../../src/components/ui/input';
+import { Label } from '../../src/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../src/components/ui/tabs";
+import { sendMessage } from '../../utils/messaging';
+import type { LLMProvider } from '../../src/services/llmService'; // Import provider type
 
-// Simple hook for getting translations
-// In a larger app, consider a dedicated context or library
-const useTranslation = () => {
-  const t = (key: string) => browser.i18n.getMessage(key);
-  return { t };
-};
+const avatarSrc = "/images/scarlett-handshake.png";
 
-// Simple Spinner Component
-const Spinner = () => (
-  <svg className="animate-spin h-4 w-4 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-  </svg>
-);
-
-// Add onConfigSaved prop definition
 interface OnInstallPageProps {
-  onConfigSaved: (config: any) => void;
+  onSetupComplete: (config: any) => void; // Callback when setup is done
 }
 
-// Use React.FC for props typing
-const OnInstallPage: React.FC<OnInstallPageProps> = ({ onConfigSaved }) => {
-  const { t } = useTranslation();
-  // Get status and providers list from the hook
-  const { statuses: localProviderStatuses, providers } = useProviderStatus(); 
-  
-  const [selectedLocalProvider, setSelectedLocalProvider] = useState<string | null>(null);
-  const [apiKey, setApiKey] = useState('');
-  // Auto-selection logic now lives here, watching the statuses from the hook
-  const [autoSelected, setAutoSelected] = useState(false); 
-  // Add loading state for the save button
-  const [isSaving, setIsSaving] = useState(false);
-  // Add error state for saving
-  const [saveError, setSaveError] = useState<string | null>(null);
+// Define the structure for saving config
+// Needs to align with LLMUserConfig types in llmService.ts
+interface ConfigToSave {
+  provider: LLMProvider;
+  endpoint?: string; // For ollama
+  apiKey?: string;   // For openrouter, groq
+  // We won't save chatModel/embeddingModel here, that happens in ModelSelectionPage
+}
 
-  useEffect(() => {
-    if (autoSelected || selectedLocalProvider) return; // Don't auto-select if already selected manually or automatically
+const OnInstallPage: React.FC<OnInstallPageProps> = ({ onSetupComplete }) => {
+  const [selectedProvider, setSelectedProvider] = useState<LLMProvider>('ollama');
+  const [ollamaEndpoint, setOllamaEndpoint] = useState('http://localhost:11434');
+  const [openRouterApiKey, setOpenRouterApiKey] = useState('');
+  const [groqApiKey, setGroqApiKey] = useState(''); // New state for Groq API key
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-    // Find the first provider that is connected
-    const firstConnected = providers.find(p => localProviderStatuses[p.id] === 'connected');
+  const handleSaveConfiguration = async () => {
+    setIsLoading(true);
+    setError(null);
 
-    if (firstConnected) {
-      console.log("Auto-selecting first connected provider:", firstConnected.id);
-      setSelectedLocalProvider(firstConnected.id);
-      setAutoSelected(true);
-    }
-  }, [localProviderStatuses, providers, autoSelected, selectedLocalProvider]); // Depend on statuses from hook
+    let configToSave: ConfigToSave | null = null;
 
-  const handleLocalProviderSelect = (value: string) => {
-    if (value) { 
-      console.log("Manually selected local provider:", value);
-      setSelectedLocalProvider(value);
-      setAutoSelected(true); 
-    }
-  };
+    switch (selectedProvider) {
+      case 'ollama':
+        if (!ollamaEndpoint) {
+          setError('Ollama endpoint is required.');
+          setIsLoading(false);
+          return;
+        }
+        // Basic URL validation
+        try {
+          new URL(ollamaEndpoint);
+        } catch (_){
+          setError('Invalid Ollama endpoint URL.');
+          setIsLoading(false);
+          return;
+        }
+        configToSave = { provider: 'ollama', endpoint: ollamaEndpoint };
+        break;
 
-  const handleApiKeyChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setApiKey(event.target.value);
-  };
+      case 'openrouter':
+        if (!openRouterApiKey) {
+          setError('OpenRouter API Key is required.');
+          setIsLoading(false);
+          return;
+        }
+        configToSave = { provider: 'openrouter', apiKey: openRouterApiKey };
+        break;
 
-  const handleSaveConfiguration = async (provider: string) => {
-    console.log(`Preparing to save configuration for ${provider}...`);
-    setIsSaving(true);
-    setSaveError(null);
+      case 'groq': // Handle Groq case
+        if (!groqApiKey) {
+          setError('Groq API Key is required.');
+          setIsLoading(false);
+          return;
+        }
+        configToSave = { provider: 'groq', apiKey: groqApiKey };
+        break;
+      
+      // case 'venice': // Placeholder - No config saving needed yet
+      //   configToSave = { provider: 'venice' }; // Needs Venice provider type added
+      //   break;
 
-    let configToSave: any = {};
-    let isOnlineProvider = false;
-
-    if (provider === 'openrouter') {
-      if (!apiKey) {
-        console.error("API Key is missing for OpenRouter");
-        setSaveError("Please enter your OpenRouter API key.");
-        setIsSaving(false);
+      default:
+        setError(`Invalid provider selected: ${selectedProvider}`);
+        setIsLoading(false);
         return;
-      }
-      configToSave = { provider: 'openrouter', apiKey };
-      isOnlineProvider = true;
-    } else {
-      // provider is the ID of the selected local provider
-      if (!selectedLocalProvider) {
-        console.error("No local provider selected");
-        setSaveError("Please select a local provider.");
-        setIsSaving(false);
-        return;
-      }
-      // Find the config details for the selected provider
-      const providerDetails = localProvidersConfig.find(p => p.id === selectedLocalProvider);
-       if (!providerDetails) {
-         console.error("Selected local provider details not found");
-         setSaveError("Internal error: Provider details not found.");
-         setIsSaving(false);
-         return;
-       }
-      configToSave = { 
-          provider: selectedLocalProvider, 
-          endpoint: providerDetails.endpoint, 
-          // We might want to save the specific checkPath too?
-          checkPath: providerDetails.checkPath 
-      };
     }
 
-    console.log("Attempting to save config:", configToSave);
+    if (!configToSave) {
+        setError("Failed to determine configuration to save.");
+        setIsLoading(false);
+        return;
+    }
 
     try {
-      // TODO: Implement actual message sending to background/offscreen script
-      // Example using browser.runtime.sendMessage
-      // const response = await browser.runtime.sendMessage({
-      //   type: "SAVE_PROVIDER_CONFIG",
-      //   payload: configToSave
-      // });
+      console.log('[OnInstallPage] Saving configuration:', configToSave);
+      // We just pass the partial config needed for model selection
+      onSetupComplete(configToSave);
 
-      // Placeholder for successful save
-      const response = { success: true }; // Assume success for now
-      console.log("Save response (placeholder):", response);
-
-      if (response.success) {
-        console.log("Configuration saved successfully via background. Calling onConfigSaved...");
-        // Call the callback prop instead of navigating
-        onConfigSaved(configToSave); 
-      } else {
-        console.error("Failed to save configuration via background.");
-        // setSaveError(response.error || "Failed to save configuration.");
-        setSaveError("Failed to save configuration."); // Placeholder error
-      }
-    } catch (error: any) {
-      console.error("Error sending save message:", error);
-      setSaveError(error.message || "An unknown error occurred while saving.");
+    } catch (err: any) {
+      console.error('[OnInstallPage] Error saving configuration:', err);
+      setError(err.message || 'An unknown error occurred while saving.');
     } finally {
-      setIsSaving(false);
+      setIsLoading(false);
     }
   };
 
   return (
-    // Wrapper for vertical centering
     <div className="min-h-screen flex items-center justify-center p-4">
-      {/* Main content container with increased padding */}
-      <div className="container mx-auto p-8 max-w-2xl flex flex-col items-center bg-card text-card-foreground rounded-lg shadow-lg">
+      <div className="container mx-auto p-8 max-w-xl flex flex-col items-center bg-card text-card-foreground rounded-lg shadow-lg">
         <img
-          src="/images/scarlett-handshake.png"
-          alt="Scarlett Mascot Handshake"
-          className="w-56 h-56 mb-6 object-contain" // Increased image size
+          src={avatarSrc}
+          alt="Scarlett Wizard Avatar"
+          className="w-48 h-48 mb-6 object-contain"
         />
-        <h1 className="text-3xl font-bold mb-3">{t('onInstall_title')}</h1> {/* Increased text size */}
-        <p className="text-base text-muted-foreground mb-8">{t('onInstall_configurePrompt')}</p> {/* Increased text size */}
+        <h1 className="text-3xl font-bold mb-3">Welcome to Scarlett!</h1>
+        <p className="text-lg text-muted-foreground mb-8">
+          Let's get you set up. Choose your preferred LLM provider.
+        </p>
 
-        <Tabs defaultValue="local" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="local">{t('onInstall_localTab')}</TabsTrigger>
-            <TabsTrigger value="online">{t('onInstall_onlineTab')}</TabsTrigger>
+        <Tabs 
+          value={selectedProvider} 
+          onValueChange={(value) => setSelectedProvider(value as LLMProvider)} 
+          className="w-full mb-8"
+        >
+          <TabsList className="grid w-full grid-cols-4"> {/* Adjust grid columns */}
+            <TabsTrigger value="ollama">Local (Ollama)</TabsTrigger>
+            <TabsTrigger value="openrouter">OpenRouter</TabsTrigger>
+            <TabsTrigger value="groq">Groq</TabsTrigger>
+            <TabsTrigger value="venice" disabled>Venice (Soon)</TabsTrigger> {/* Placeholder */}
           </TabsList>
 
-          <TabsContent value="local" className="mt-6"> {/* Increased margin */}
-            <ToggleGroup
-              type="single"
-              orientation="vertical"
-              className="flex flex-col gap-3 w-full" 
-              value={selectedLocalProvider || ''} 
-              onValueChange={handleLocalProviderSelect} 
-            >
-              {providers.map((provider) => {
-                // Get status from hook state
-                const status = localProviderStatuses[provider.id] ?? 'checking'; 
-                const isDisabled = status !== 'connected';
-
-                return (
-                  <ToggleGroupItem
-                    key={provider.id}
-                    value={provider.id} 
-                    aria-label={`Select ${provider.name}`}
-                    disabled={isDisabled} 
-                    className={cn(
-                      "flex items-center justify-start w-full p-4 h-auto rounded-md border-2 border-transparent",
-                      "bg-muted hover:bg-muted/90 text-foreground text-base",
-                      "data-[state=on]:border-blue-500",
-                      "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                      isDisabled && "opacity-60 cursor-not-allowed"
-                    )}
-                  >
-                    <img src={provider.logo} alt={`${provider.name} logo`} className="w-10 h-10 rounded mr-4 shrink-0 object-contain" />
-                    <span className="flex-grow text-left font-medium">{provider.name}</span>
-                    <div className="flex items-center justify-center ml-auto pl-3 text-xs min-w-[80px] text-right"> 
-                      {status === 'connected' && (
-                        <>
-                          <span className="text-green-500 mr-2">{t('onInstall_detectedStatus')}</span>
-                          <div className="w-2.5 h-2.5 bg-green-500 rounded-full shrink-0"></div>
-                        </>
-                      )}
-                      {status === 'checking' && (
-                         <Spinner />
-                      )}
-                      {status === 'not-running' && (
-                        <span className="text-muted-foreground">Not Running</span> // Muted color for not running
-                      )}
-                      {status === 'error' && (
-                        <span className="text-red-500">Error</span> // Keep error red
-                      )}
-                    </div>
-                  </ToggleGroupItem>
-                );
-              })}
-            </ToggleGroup>
-            <Button
-              size="lg"
-              className="w-full mt-6"
-              disabled={!selectedLocalProvider || localProviderStatuses[selectedLocalProvider] !== 'connected' || isSaving}
-              onClick={() => handleSaveConfiguration(selectedLocalProvider!)}
-            >
-              {isSaving ? "Connecting..." : "Connect"}
-            </Button>
-            {saveError && <p className="text-red-500 text-sm mt-2 text-center">{saveError}</p>} {/* Show save error */}
-          </TabsContent>
-
-          <TabsContent value="online" className="mt-6"> {/* Increased margin */}
-        
-            <div className="space-y-3"> {/* Increased spacing */}
-               <label htmlFor="api-key" className="text-base font-medium leading-none"> {/* Increased size */}
-                 OpenRouter API Key
-               </label>
-              <InputWithIcon
-                id="api-key"
-                type="text" // Changed type to text
-                icon={<Key size={18} />} // Increased icon size
-                iconPosition="left"
-                placeholder={t('onInstall_apiKeyPlaceholder')}
-                value={apiKey}
-                onChange={handleApiKeyChange}
-                className="h-11 text-base" // Increased height and text size
+          {/* Ollama Content */}
+          <TabsContent value="ollama" className="mt-4 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Connect to a running Ollama instance on your local network.
+            </p>
+            <div className="space-y-1">
+              <Label htmlFor="ollama-endpoint">Ollama Endpoint URL</Label>
+              <Input
+                id="ollama-endpoint"
+                type="url" 
+                placeholder="http://localhost:11434"
+                value={ollamaEndpoint}
+                onChange={(e) => setOllamaEndpoint(e.target.value)}
               />
-               <p className="text-sm text-muted-foreground"> {/* Increased size */}
-                  Find your key on the <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="underline">OpenRouter Keys page</a>.
-               </p>
             </div>
-            <Button
-              size="lg" // Use large button size
-              className="w-full mt-6" // Increased margin
-              disabled={!apiKey || isSaving}
-              onClick={() => handleSaveConfiguration('openrouter')}
-            >
-               {isSaving ? "Connecting..." : "Connect"}
-            </Button>
-            {saveError && <p className="text-red-500 text-sm mt-2 text-center">{saveError}</p>} {/* Show save error */}
           </TabsContent>
+
+          {/* OpenRouter Content */}
+          <TabsContent value="openrouter" className="mt-4 space-y-4">
+             <p className="text-sm text-muted-foreground">
+              Use various models via OpenRouter. Requires an API key.
+            </p>
+            <div className="space-y-1">
+              <Label htmlFor="openrouter-key">OpenRouter API Key</Label>
+              <Input
+                id="openrouter-key"
+                type="password"
+                placeholder="sk-or-v1-..."
+                value={openRouterApiKey}
+                onChange={(e) => setOpenRouterApiKey(e.target.value)}
+              />
+            </div>
+          </TabsContent>
+
+          {/* Groq Content */}
+          <TabsContent value="groq" className="mt-4 space-y-4">
+             <p className="text-sm text-muted-foreground">
+              Use high-speed LPU inference via Groq. Requires an API key.
+            </p>
+            <div className="space-y-1">
+              <Label htmlFor="groq-key">Groq API Key</Label>
+              <Input
+                id="groq-key"
+                type="password"
+                placeholder="gsk_..."
+                value={groqApiKey}
+                onChange={(e) => setGroqApiKey(e.target.value)}
+              />
+            </div>
+          </TabsContent>
+
+          {/* Venice Placeholder Content */}
+          <TabsContent value="venice" className="mt-4 space-y-4">
+            <p className="text-sm text-muted-foreground text-center">
+              Connect via Venice coming soon!
+            </p>
+             <Button variant="outline" disabled className="w-full">Connect Crypto Wallet (Coming Soon)</Button>
+          </TabsContent>
+
         </Tabs>
+
+        {error && <p className="text-red-500 mb-4">Error: {error}</p>}
+
+        <Button 
+            size="lg" 
+            onClick={handleSaveConfiguration} 
+            disabled={isLoading || selectedProvider === 'venice'} // Disable for Venice placeholder
+            className="w-full"
+        >
+          {isLoading ? 'Saving...' : 'Continue to Model Selection'}
+        </Button>
       </div>
     </div>
   );
-}
+};
 
 export default OnInstallPage; 

@@ -15,5 +15,6 @@ CREATE TABLE IF NOT EXISTS clips (
 CREATE TABLE IF NOT EXISTS user_configuration (
     id INTEGER PRIMARY KEY DEFAULT 1, -- Ensure only one row
     config_json TEXT NOT NULL,
+    api_key TEXT NULL, -- Add nullable column for API keys (e.g., OpenRouter)
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ); 
