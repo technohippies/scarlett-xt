@@ -1,17 +1,17 @@
 import React from 'react';
 import { BracketsCurly } from '@phosphor-icons/react';
+import type { Flashcard } from '../../types/db'; // Import the Flashcard type
 
 export interface FlashcardClozeMessageProps {
-  /** The full text including cloze syntax, e.g., "The capital of {{c1::France}} is Paris." */
-  clozeText: string;
-  /** Optional unique key for lists */
-  id?: string | number;
+  /** The full flashcard object */
+  flashcard: Flashcard;
+  // Remove individual props: clozeText, id
 }
 
 const CLOZE_TEXT_MAX_CHARS = 60; // Allow slightly more for context
 
 /** Truncates text if it exceeds a maximum length */
-const truncateText = (text: string, maxLength: number): string => {
+const truncateText = (text: string | null | undefined, maxLength: number): string => {
   if (!text) return '';
   return text.length > maxLength
     ? `${text.substring(0, maxLength)}...`
@@ -19,7 +19,7 @@ const truncateText = (text: string, maxLength: number): string => {
 };
 
 /** Formats cloze text for display, truncating if necessary */
-const formatClozeDisplay = (text: string): React.ReactNode => {
+const formatClozeDisplay = (text: string | null | undefined): React.ReactNode => {
   if (!text) return '[Empty Cloze Text]';
 
   // Check if the *original* text length exceeds the limit first
@@ -32,24 +32,27 @@ const formatClozeDisplay = (text: string): React.ReactNode => {
 };
 
 export const FlashcardClozeMessage: React.FC<FlashcardClozeMessageProps> = ({
-  clozeText,
-  id,
+  flashcard // Destructure the flashcard object
 }) => {
+  const { id, cloze_text, source_highlight, source_url } = flashcard; // Extract needed fields
+
   // Basic validation
-  if (!clozeText) {
-    console.warn('FlashcardClozeMessage requires clozeText.');
+  if (!cloze_text) {
+    console.warn('FlashcardClozeMessage requires flashcard with cloze_text.');
     return null;
   }
 
-  const displayContent = formatClozeDisplay(clozeText);
+  const displayContent = formatClozeDisplay(cloze_text);
 
-  // Tooltip showing full text
-  const hoverTitle = `Flashcard (Cloze)\nText: ${clozeText}`;
+  // Tooltip showing full text and maybe source
+  let hoverTitle = `Flashcard (Cloze)\nText: ${cloze_text}`;
+  if (source_highlight) hoverTitle += `\nHighlight: ${source_highlight}`;
+  if (source_url) hoverTitle += `\nSource: ${source_url}`;
 
   return (
     <div
       className="inline-flex items-center gap-2 mx-auto my-1 p-3 bg-white rounded-lg shadow-sm border border-gray-200 text-sm"
-      key={id}
+      key={`fc-msg-${id}`} // Use flashcard ID for key
       title={hoverTitle}
     >
       {/* Icon */}

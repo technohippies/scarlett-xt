@@ -7,6 +7,7 @@ import browser, { type Runtime } from 'webextension-polyfill'; // Needed for get
 import dbSchemaSql from '../utils/dbSchema.sql?raw'; // Use relative path
 // Restore @webext-core/messaging imports
 import { onMessage, type ProtocolMap, type DbExecRequest, type DbQueryRequest } from '../utils/messaging'; 
+import { vector } from '@electric-sql/pglite/vector'; // Import the vector extension
 
 // Log immediately when the script starts executing
 console.log('[Offscreen Script] Top-level execution start.'); 
@@ -39,8 +40,13 @@ export default defineUnlistedScript(() => {
         const PGlite = (pgliteModule.PGlite || pgliteModule.default);
         if (!PGlite) throw new Error("PGlite class not found in dynamic import");
         console.log("[Offscreen initDb] Dynamically imported PGlite class.");
-        const instance = new PGlite('idb://scarlett-wxt-db');
-        console.log("[Offscreen initDb] PGlite instance created, awaiting ready...");
+        
+        // Initialize PGlite with the vector extension
+        const instance = new PGlite('idb://scarlett-wxt-db', {
+            extensions: { vector } // Pass the imported extension
+        });
+
+        console.log("[Offscreen initDb] PGlite instance created with vector extension, awaiting ready...");
         await instance.ready;
         console.log('[Offscreen initDb] PGlite instance ready.');
         

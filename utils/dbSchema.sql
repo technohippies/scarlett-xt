@@ -1,3 +1,6 @@
+-- Enable pgvector extension if not already enabled
+CREATE EXTENSION IF NOT EXISTS vector;
+
 -- Remove old tables if they exist
 DROP TABLE IF EXISTS clips;
 DROP TABLE IF EXISTS test_items;
@@ -9,7 +12,7 @@ CREATE TABLE IF NOT EXISTS bookmarks (
     title TEXT,             -- Page title
     saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     tags TEXT NULL,         -- Comma-separated tags or JSON array
-    embedding BLOB NULL     -- Store embedding vector for semantic search
+    embedding vector(1024) NULL -- Use vector type (adjust dimension if needed)
 );
 
 -- Table for flashcards
@@ -63,3 +66,6 @@ CREATE INDEX IF NOT EXISTS idx_flashcards_due ON flashcards(due);
 
 -- Optional: Index for chat message timestamps
 CREATE INDEX IF NOT EXISTS idx_chat_messages_timestamp ON chat_messages(timestamp);
+
+-- Optional: Index for vector similarity search on bookmarks
+CREATE INDEX IF NOT EXISTS idx_bookmarks_embedding ON bookmarks USING hnsw (embedding vector_cosine_ops);

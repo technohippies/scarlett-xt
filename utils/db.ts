@@ -4,6 +4,8 @@
 import { Mutex } from 'async-mutex';
 import browser from 'webextension-polyfill';
 import { sendMessage } from './messaging'; 
+import { State, createEmptyCard, Card as FSRSCard } from 'ts-fsrs';
+import { Bookmark, Flashcard, ChatMessageDb, ChatHistoryItem } from '../src/types/db'; // Import DB types
 
 const OFFSCREEN_DOCUMENT_PATH = 'offscreen.html';
 let creatingPromise: Promise<void> | null = null;
@@ -79,6 +81,203 @@ export async function queryDb(sql: string, params?: any[]): Promise<any> {
   // console.log('[DB Util] Sending dbQuery message:', { sql, params }); // Less verbose
   return sendMessage('dbQuery', { sql, params: params || [] }); 
 }
+
+// --- Database Interaction Functions ---
+
+/**
+ * Saves a bookmark to the database.
+ * 
+ * @param bookmarkData Partial bookmark data (url is required)
+ * @returns The created Bookmark object with its ID
+ */
+export async function createBookmark(bookmarkData: Pick<Bookmark, 'url'> & Partial<Omit<Bookmark, 'id' | 'saved_at'> >): Promise<Bookmark> {
+    const sql = `
+        INSERT INTO bookmarks (url, title, tags, embedding)
+        VALUES (?, ?, ?, ?)
+        RETURNING id, url, title, saved_at, tags, embedding;
+    `;
+    // Note: Handling Blob/embedding requires specific pglite/messaging logic.
+    // This assumes the offscreen worker handles Uint8Array or similar.
+    // We might need to adjust how `embedding` is passed.
+    const params = [
+        bookmarkData.url,
+        bookmarkData.title ?? null,
+        bookmarkData.tags ?? null,
+        bookmarkData.embedding ?? null 
+    ];
+    const result = await queryDb(sql, params);
+    if (!result?.rows?.[0]) throw new Error("Failed to create bookmark");
+    return result.rows[0] as Bookmark;
+}
+
+/**
+ * Saves a flashcard to the database, initializing FSRS state.
+ * 
+ * @param flashcardData Data for the new flashcard (excluding FSRS state and id/created_at)
+ * @param now The current date/time for initializing FSRS state
+ * @returns The created Flashcard object with its ID and initial FSRS state
+ */
+export async function createFlashcard(flashcardData: Omit<Flashcard, 'id' | 'created_at' | keyof FSRSCard | 'due' | 'state' | 'last_review'>, now: Date = new Date()): Promise<Flashcard> {
+    // Get initial FSRS state using ts-fsrs
+    const initialCardState = createEmptyCard(now);
+
+    const sql = `
+        INSERT INTO flashcards (
+            type, front, back, cloze_text, source_url, source_highlight, 
+            source_language, target_language, context, tags, 
+            due, stability, difficulty, elapsed_days, scheduled_days, 
+            reps, lapses, state, last_review
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        RETURNING *; 
+    `;
+    
+    const params = [
+        flashcardData.type,
+        flashcardData.front ?? null,
+        flashcardData.back ?? null,
+        flashcardData.cloze_text ?? null,
+        flashcardData.source_url ?? null,
+        flashcardData.source_highlight ?? null,
+        flashcardData.source_language ?? null,
+        flashcardData.target_language ?? null,
+        flashcardData.context ?? null,
+        flashcardData.tags ?? null,
+        // FSRS initial state:
+        initialCardState.due.toISOString(), // Store as ISO string
+        initialCardState.stability,
+        initialCardState.difficulty,
+        initialCardState.elapsed_days,
+        initialCardState.scheduled_days,
+        initialCardState.reps,
+        initialCardState.lapses,
+        initialCardState.state, // State enum value
+        initialCardState.last_review?.toISOString() ?? null // Store as ISO string or null
+    ];
+
+    const result = await queryDb(sql, params);
+    if (!result?.rows?.[0]) throw new Error("Failed to create flashcard");
+    return result.rows[0] as Flashcard;
+}
+
+/**
+ * Saves a chat message to the database.
+ * 
+ * @param messageData The chat message data
+ * @returns The created ChatMessageDb object with its ID and timestamp
+ */
+export async function createChatMessage(messageData: Omit<ChatMessageDb, 'id' | 'timestamp'>): Promise<ChatMessageDb> {
+    const sql = `
+        INSERT INTO chat_messages (role, content, bookmark_id, flashcard_id)
+        VALUES (?, ?, ?, ?)
+        RETURNING *;
+    `;
+    const params = [
+        messageData.role,
+        messageData.content ?? null,
+        messageData.bookmark_id ?? null,
+        messageData.flashcard_id ?? null
+    ];
+    const result = await queryDb(sql, params);
+    if (!result?.rows?.[0]) throw new Error("Failed to create chat message");
+    return result.rows[0] as ChatMessageDb;
+}
+
+/**
+ * Retrieves the chat history, joining bookmarks and flashcards.
+ * 
+ * @param limit Maximum number of messages to retrieve (optional)
+ * @returns An array of ChatHistoryItem objects
+ */
+export async function getChatHistory(limit?: number): Promise<ChatHistoryItem[]> {
+    // Construct the query to fetch messages and join related data
+    const sql = `
+        SELECT 
+            m.*, 
+            b.id as bookmark_id_joined, b.url as bookmark_url, b.title as bookmark_title, b.saved_at as bookmark_saved_at, b.tags as bookmark_tags, b.embedding as bookmark_embedding, 
+            f.id as flashcard_id_joined, f.* -- Select all flashcard fields
+        FROM chat_messages m
+        LEFT JOIN bookmarks b ON m.bookmark_id = b.id
+        LEFT JOIN flashcards f ON m.flashcard_id = f.id
+        ORDER BY m.timestamp DESC
+        ${limit ? 'LIMIT ?' : ''}
+    `;
+    const params = limit ? [limit] : [];
+    const result = await queryDb(sql, params);
+
+    if (!result?.rows) return [];
+
+    // Map the raw rows to the ChatHistoryItem union type
+    return result.rows.map((row: any): ChatHistoryItem => {
+        const message: ChatMessageDb = {
+            id: row.id,
+            role: row.role,
+            content: row.content,
+            bookmark_id: row.bookmark_id,
+            flashcard_id: row.flashcard_id,
+            timestamp: row.timestamp,
+        };
+
+        if (row.role === 'bookmark' && row.bookmark_id_joined) {
+            const bookmark: Bookmark = {
+                id: row.bookmark_id_joined,
+                url: row.bookmark_url,
+                title: row.bookmark_title,
+                saved_at: row.bookmark_saved_at,
+                tags: row.bookmark_tags,
+                embedding: row.bookmark_embedding, // Again, assuming blob handling
+            };
+            return { type: 'bookmark', message, bookmark };
+        } else if (row.role === 'flashcard' && row.flashcard_id_joined) {
+             // Map all flashcard fields from the row (prefix f.)
+             const flashcard: Flashcard = {
+                 id: row.id_1, // Adjust alias based on pglite output if needed
+                 type: row.type,
+                 front: row.front,
+                 back: row.back,
+                 cloze_text: row.cloze_text,
+                 source_url: row.source_url,
+                 source_highlight: row.source_highlight,
+                 source_language: row.source_language,
+                 target_language: row.target_language,
+                 context: row.context,
+                 tags: row.tags_1, // Adjust alias
+                 created_at: row.created_at,
+                 due: row.due,
+                 stability: row.stability,
+                 difficulty: row.difficulty,
+                 elapsed_days: row.elapsed_days,
+                 scheduled_days: row.scheduled_days,
+                 reps: row.reps,
+                 lapses: row.lapses,
+                 state: row.state as State,
+                 last_review: row.last_review,
+             };
+            return { type: 'flashcard', message, flashcard };
+        } else {
+            return { type: 'message', data: message };
+        }
+    }).reverse(); // Reverse back to chronological order
+}
+
+/**
+ * Retrieves flashcards due for review.
+ * 
+ * @param now The current date/time to compare against the due date
+ * @returns An array of due Flashcard objects
+ */
+export async function getDueFlashcards(now: Date = new Date()): Promise<Flashcard[]> {
+    const sql = `
+        SELECT * FROM flashcards
+        WHERE due <= ?
+        ORDER BY due ASC;
+    `;
+    const params = [now.toISOString()];
+    const result = await queryDb(sql, params);
+    return (result?.rows || []) as Flashcard[];
+}
+
+// Future functions (updateFlashcardState, deleteBookmark, etc.) can be added here.
 
 // Schema is initialized directly in offscreen.ts
 // export async function initializeSchema() { ... } 

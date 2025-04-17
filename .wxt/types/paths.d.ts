@@ -7,6 +7,7 @@ declare module "wxt/browser" {
     | "/_locales/en/messages.json"
     | "/_locales/zh/messages.json"
     | "/background.js"
+    | "/content-scripts/content.js"
     | "/electric-sql/_int.tar.gz"
     | "/electric-sql/adminpack.tar.gz"
     | "/electric-sql/amcheck.tar.gz"

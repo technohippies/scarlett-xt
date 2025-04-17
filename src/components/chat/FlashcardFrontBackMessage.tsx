@@ -1,13 +1,11 @@
 import React from 'react';
 import { Cards } from '@phosphor-icons/react';
+import type { Flashcard } from '../../types/db'; // Import the Flashcard type
 
 export interface FlashcardFrontBackMessageProps {
-  /** Text for the front of the card */
-  frontText: string;
-  /** Text for the back of the card */
-  backText: string;
-  /** Optional unique key for lists */
-  id?: string | number;
+  /** The full flashcard object */
+  flashcard: Flashcard;
+  // Remove individual props: frontText, backText, id
 }
 
 // Define character limits for display
@@ -15,7 +13,7 @@ const FRONT_TEXT_MAX_CHARS = 25;
 const BACK_TEXT_MAX_CHARS = 20;
 
 /** Truncates text if it exceeds a maximum length */
-const truncateText = (text: string, maxLength: number): string => {
+const truncateText = (text: string | null | undefined, maxLength: number): string => {
   if (!text) return ''; // Handle null/undefined/empty input
   return text.length > maxLength
     ? `${text.substring(0, maxLength)}...`
@@ -23,27 +21,29 @@ const truncateText = (text: string, maxLength: number): string => {
 };
 
 export const FlashcardFrontBackMessage: React.FC<FlashcardFrontBackMessageProps> = ({
-  frontText,
-  backText,
-  id,
+  flashcard // Destructure the flashcard object
 }) => {
+  const { id, front, back, source_highlight, source_url } = flashcard; // Extract needed fields
+
   // Basic validation
-  if (!frontText && !backText) {
+  if (!front && !back) {
     // Allow if at least one side has text
-    console.warn('FlashcardFrontBackMessage requires at least frontText or backText.');
+    console.warn('FlashcardFrontBackMessage requires flashcard with at least front or back text.');
     return null;
   }
 
-  const displayFront = truncateText(frontText, FRONT_TEXT_MAX_CHARS);
-  const displayBack = truncateText(backText, BACK_TEXT_MAX_CHARS);
+  const displayFront = truncateText(front, FRONT_TEXT_MAX_CHARS);
+  const displayBack = truncateText(back, BACK_TEXT_MAX_CHARS);
 
   // Tooltip showing full details
-  const hoverTitle = `Flashcard (Front/Back)\nFront: ${frontText || '[Empty]'}\nBack: ${backText || '[Empty]'}`;
+  let hoverTitle = `Flashcard (Front/Back)\nFront: ${front || '[Empty]'}\nBack: ${back || '[Empty]'}`;
+  if (source_highlight) hoverTitle += `\nHighlight: ${source_highlight}`;
+  if (source_url) hoverTitle += `\nSource: ${source_url}`;
 
   return (
     <div
       className="inline-flex items-center gap-2 mx-auto my-1 p-3 bg-white rounded-lg shadow-sm border border-gray-200 text-sm"
-      key={id}
+      key={`fb-msg-${id}`} // Use flashcard ID for key
       title={hoverTitle}
     >
       {/* Icon */}
