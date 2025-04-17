@@ -186,7 +186,7 @@ const OnInstallPage: React.FC<OnInstallPageProps> = ({ onSetupComplete }) => {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="container mx-auto p-8 max-w-xl flex flex-col items-center bg-card text-card-foreground rounded-lg shadow-lg">
+      <div className="container mx-auto p-8 max-w-2xl flex flex-col items-center bg-card text-card-foreground rounded-lg shadow-lg">
         <img
           src={avatarSrc}
           alt="Scarlett Offering Handshake"
@@ -262,7 +262,7 @@ const OnInstallPage: React.FC<OnInstallPageProps> = ({ onSetupComplete }) => {
               <Input
                 id="openrouter-key"
                 type="password"
-                placeholder="OpenRouter API Key (sk-or-v1-...)"
+                placeholder="sk-or-v1..."
                 value={openRouterApiKey}
                 onChange={(e) => setOpenRouterApiKey(e.target.value)}
               />
@@ -288,7 +288,7 @@ const OnInstallPage: React.FC<OnInstallPageProps> = ({ onSetupComplete }) => {
             disabled={isLoading || selectedPrimaryProvider === 'venice' || (selectedPrimaryProvider === 'local' && !selectedLocalProviderId) || (selectedPrimaryProvider === 'openrouter' && !openRouterApiKey)}
             className="w-full mt-4" // Added margin top
         >
-          {isLoading ? 'Saving...' : 'Continue to Model Selection'}
+          {isLoading ? 'Saving...' : 'Next'}
         </Button>
       </div>
     </div>

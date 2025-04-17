@@ -136,11 +136,6 @@ export async function streamChatResponse(request: StreamChatRequest): Promise<vo
         providerModule = openRouterProvider;
         break; // Exit switch
       }
-      case 'groq': {
-        const { groqProvider } = await import('./providers/groq');
-        providerModule = groqProvider;
-        break;
-      }
       default: {
         console.error("[llmService] Unsupported provider found in config");
         sendChunkCallback({ status: 'error', error: "Unsupported LLM provider" });
@@ -182,7 +177,6 @@ export async function getEmbeddings(request: EmbeddingRequest): Promise<Embeddin
            break;
          }
          case 'openrouter':
-         case 'groq':
            throw new Error(`${config.provider} embeddings not yet implemented.`);
          default: {
            console.error("[llmService] Unsupported provider for embeddings");

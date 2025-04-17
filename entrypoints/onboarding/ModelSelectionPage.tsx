@@ -31,7 +31,8 @@ const openRouterFreeModels: Model[] = [
   { id: "qwen/qwq-32b", name: "Qwen: QwQ 32B" },
   { id: "google/gemini-2-flash-experimental", name: "Google: Gemini 2.0 Flash Experimental" },
   { id: "google/gemini-2-flash-thinking-experimental", name: "Google: Gemini 2.0 Flash Thinking Experimental" },
-  { id: "nvidia/llama-3.1-nemotron-ultra-253b-v1", name: "NVIDIA: Llama 3.1 Nemotron Ultra 253B v1" },
+  // Removed due to 404 error from OpenRouter API
+  // { id: "nvidia/llama-3.1-nemotron-ultra-253b-v1", name: "NVIDIA: Llama 3.1 Nemotron Ultra 253B v1" },
   { id: "deepseek/deepseek-r1-zero", name: "DeepSeek: DeepSeek R1 Zero" },
   { id: "deepseek/deepseek-v3-base", name: "DeepSeek: DeepSeek V3 Base" },
 ];
@@ -386,7 +387,7 @@ const ModelSelectionPage: React.FC<ModelSelectionPageProps> = ({
               disabled={isLoading || !selectedChatModel || (needsEmbedding && !selectedEmbeddingModel)}
               className="w-full"
             >
-              Confirm Selection(s)
+              Confirm
             </Button>
           </div>
         )}

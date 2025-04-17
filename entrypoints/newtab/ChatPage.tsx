@@ -2,13 +2,16 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import browser from 'webextension-polyfill';
 import { Gear } from '@phosphor-icons/react';
 import { Button } from '../../src/components/ui/button';
-import Message, { type ChatMessage } from './Message';
+import { ChatMessageBase } from '../../src/components/chat/ChatMessageBase';
+import { AssistantLoadingMessage } from '../../src/components/chat/AssistantLoadingMessage';
 import ChatInput from './ChatInput';
 import { queryDb } from '../../utils/db';
-import { sendMessage, onMessage, type OllamaStreamChunk } from '../../utils/messaging';
+import { sendMessage, onMessage } from '../../utils/messaging';
+// Explicitly alias the imported type
+import type { ChatMessage as AppChatMessage } from '../../src/types/chat';
 
 const ChatPage: React.FC = () => {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<AppChatMessage[]>([]);
   const [inputValue, setInputValue] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [currentAssistantMessageId, setCurrentAssistantMessageId] = useState<string | null>(null);
@@ -43,7 +46,7 @@ const ChatPage: React.FC = () => {
     fetchConfig();
   }, []); // Empty dependency array means run once on mount
 
-  // --- Listener for Background Stream Responses ---
+  // --- Listener for Background Stream Responses (Updated Logic) ---
   useEffect(() => {
       console.log('[ChatPage] Setting up ollamaResponse listener.');
       const cleanup = onMessage('ollamaResponse', (message) => {
@@ -51,122 +54,110 @@ const ChatPage: React.FC = () => {
           console.log('[ChatPage] Received ollamaResponse chunk:', chunk);
 
           setMessages((prevMessages) => {
-              // Find the last message
               const lastMessage = prevMessages[prevMessages.length - 1];
 
               if (chunk.status === 'chunk') {
-                  // If the last message is the assistant message we are building, append to it
-                  if (lastMessage && lastMessage.id === currentAssistantMessageId && lastMessage.role === 'assistant') {
-                      return [
-                          ...prevMessages.slice(0, -1),
-                          { ...lastMessage, content: lastMessage.content + chunk.content },
-                      ];
+                  setIsLoading(false);
+                  // Check if the VERY last message is the assistant message we are building
+                  if (lastMessage && lastMessage.role === 'assistant' && !lastMessage.isError) {
+                      // Append chunk to the last message
+                      return prevMessages.map((msg, index) => 
+                          index === prevMessages.length - 1 
+                          ? { ...msg, content: msg.content + chunk.content } 
+                          : msg
+                      );
                   } else {
-                      // This should ideally not happen if currentAssistantMessageId is set correctly
-                      // But as a fallback, create a new assistant message
-                      console.warn("[ChatPage] Received chunk but no matching assistant message ID found. Creating new message.");
-                      const newAssistantMessage: ChatMessage = {
-                         id: currentAssistantMessageId || `assistant-${Date.now()}`, // Use ID if available, else generate
+                      // Last message is user, error, or list is empty. Create NEW assistant message.
+                      const newAssistantMessage: AppChatMessage = {
+                         id: `assistant-${Date.now()}-${Math.random()}`,
                          role: 'assistant',
                          content: chunk.content,
                        };
-                      setCurrentAssistantMessageId(newAssistantMessage.id); // Ensure ID is set
                       return [...prevMessages, newAssistantMessage];
                   }
               } else if (chunk.status === 'done') {
-                  setIsLoading(false); // Request finished
-                  setCurrentAssistantMessageId(null); // Reset tracker
+                  setIsLoading(false); 
                   console.log('[ChatPage] Stream finished. Stats:', chunk.stats);
-                  // Optionally add stats display or logging
+                  // Make sure the last message isn't empty if stream completes without chunks (unlikely but safe)
+                  if (lastMessage && lastMessage.role === 'assistant' && lastMessage.content === '') {
+                    return prevMessages.slice(0, -1); // Remove empty placeholder if it exists
+                  }
               } else if (chunk.status === 'error') {
-                  setIsLoading(false); // Request finished (with error)
-                  setCurrentAssistantMessageId(null); // Reset tracker
-                  // Append an error message or display it differently
-                  const errorMessage: ChatMessage = {
+                  setIsLoading(false);
+                  // Remove empty placeholder if the last message was one
+                  const messagesWithoutPlaceholder = (lastMessage && lastMessage.role === 'assistant' && lastMessage.content === '') 
+                      ? prevMessages.slice(0, -1) 
+                      : prevMessages;
+                  // Append a new error message
+                  const errorMessage: AppChatMessage = {
                        id: `error-${Date.now()}`,
-                       role: 'assistant', // Or a special 'error' role?
+                       role: 'assistant',
                        content: `Error: ${chunk.error}`,
-                       isError: true, // Add a flag for styling
+                       isError: true,
                   };
-                  return [...prevMessages, errorMessage];
+                  return [...messagesWithoutPlaceholder, errorMessage];
               } else if (chunk.status === 'override_granted') {
                    setIsLoading(false);
-                   setCurrentAssistantMessageId(null);
-                   // Add the override message from the background
-                   const overrideMessage: ChatMessage = {
+                   // Remove empty placeholder if the last message was one
+                   const messagesWithoutPlaceholder = (lastMessage && lastMessage.role === 'assistant' && lastMessage.content === '') 
+                      ? prevMessages.slice(0, -1) 
+                      : prevMessages;
+                   // Add the override message
+                   const overrideMessage: AppChatMessage = {
                        id: `override-${Date.now()}`,
-                       role: 'assistant', // Or a special 'system' role?
+                       role: 'assistant',
                        content: chunk.content,
                    };
-                  return [...prevMessages, overrideMessage];
+                  return [...messagesWithoutPlaceholder, overrideMessage];
                }
-
-              return prevMessages; // No change for other statuses (if any)
+              return prevMessages;
           });
       });
-
-       // Cleanup function to remove the listener when the component unmounts
       return () => {
           console.log('[ChatPage] Cleaning up ollamaResponse listener.');
           cleanup();
       };
-  }, [currentAssistantMessageId]); // Re-run if assistant message ID changes (though ideally it shouldn't mid-stream)
+  }, []);
 
   const handleInputChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputValue(event.target.value);
   };
 
-  // Use useCallback to prevent unnecessary re-renders of ChatInput if props don't change
+  // Use useCallback
   const handleSend = useCallback(async () => {
     const trimmedInput = inputValue.trim();
-    // Ensure config is loaded before sending
     if (!trimmedInput || isLoading || !configLoaded) {
        if (!configLoaded) console.warn("[ChatPage] Cannot send message: Config not loaded yet.");
        return;
      }
 
-    // Optimistically add user message
-    const newUserMessage: ChatMessage = {
+    // Use aliased type
+    const newUserMessage: AppChatMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
       content: trimmedInput,
     };
     setMessages((prev) => [...prev, newUserMessage]);
-    setInputValue(''); // Clear input
+    setInputValue('');
     setIsLoading(true);
 
-    // Prepare a placeholder for the assistant's response
-    const assistantMsgId = `assistant-${Date.now()}`;
-    const placeholderAssistantMessage: ChatMessage = {
-        id: assistantMsgId,
-        role: 'assistant',
-        content: '', // Start empty, will be filled by stream
-    };
-    setMessages((prev) => [...prev, placeholderAssistantMessage]);
-    setCurrentAssistantMessageId(assistantMsgId); // Track the ID of the message we're building
-
-    // --- Send message to background --- 
     try {
         console.log(`[ChatPage] Sending ollamaChatRequest to background.`);
-        // Prepare history (exclude the empty placeholder assistant message)
-        const historyToSend = messages.slice(0, -1); // Send all messages *before* the placeholder
-
+        const historyToSend = messages.concat(newUserMessage);
         await sendMessage('ollamaChatRequest', {
            prompt: trimmedInput,
-           history: historyToSend, // Send previous messages as history
+           history: historyToSend,
         });
-        // Don't setIsLoading(false) here; wait for 'done' or 'error' chunk
     } catch (error) {
         console.error('[ChatPage] Error sending chat request message:', error);
-        setIsLoading(false); // Stop loading on send error
-        setCurrentAssistantMessageId(null);
-        // Optionally remove the placeholder assistant message or add an error message
+        setIsLoading(false);
+        // Use aliased type for error message
         setMessages(prev => [
-            ...prev.filter(m => m.id !== assistantMsgId), // Remove placeholder
-             { id: `send-error-${Date.now()}`, role: 'assistant', content: `Failed to send message: ${error instanceof Error ? error.message : String(error)}`, isError: true }
+             ...prev,
+             { id: `send-error-${Date.now()}`, role: 'assistant', content: `Failed to send message: ${error instanceof Error ? error.message : String(error)}`, isError: true } as AppChatMessage // Type assertion might be needed here
            ]);
     }
-  }, [inputValue, isLoading, messages, configLoaded]); // Include dependencies for useCallback
+  }, [inputValue, isLoading, messages, configLoaded]);
 
   // Function to open the settings page
   const openSettingsPage = () => {
@@ -185,16 +176,17 @@ const ChatPage: React.FC = () => {
       {/* Main Chat Area */}
       <main className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="mx-auto max-w-3xl">
-          {/* Render Messages */}
-          {messages.length === 0 && (
+          {messages.length === 0 && !isLoading && (
             <div className="flex justify-center items-center h-full">
               <p className="text-muted-foreground">Start chatting with Scarlett...</p>
             </div>
           )}
           {messages.map((msg) => (
-            <Message key={msg.id} message={msg} />
+            <ChatMessageBase key={msg.id} {...msg} />
           ))}
-          {/* Empty div to scroll to */}
+          
+          {isLoading && <AssistantLoadingMessage />} 
+
           <div ref={messagesEndRef} />
         </div>
       </main>
@@ -203,10 +195,10 @@ const ChatPage: React.FC = () => {
       <footer className="sticky bottom-0 z-10 border-t bg-background p-4 md:p-6">
         <div className="mx-auto max-w-3xl">
           <ChatInput 
-            value={inputValue} 
-            onChange={handleInputChange} 
-            onSend={handleSend} 
-            isLoading={isLoading} 
+            value={inputValue}
+            onChange={handleInputChange}
+            onSend={handleSend}
+            isLoading={isLoading}
           />
         </div>
       </footer>
