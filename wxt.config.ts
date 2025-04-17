@@ -77,7 +77,7 @@ export default defineConfig({
     ],
     web_accessible_resources: [
       {
-        resources: ['/electric-sql/*'], // Keep this for PGlite dynamic import
+        resources: ['electric-sql/*'], // Keep this for PGlite dynamic import
         matches: ['<all_urls>'],
       },
       // Add other web_accessible_resources if needed

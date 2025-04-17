@@ -4,6 +4,7 @@ import { Gear } from '@phosphor-icons/react';
 import { Button } from '../../src/components/ui/button';
 import Message, { type ChatMessage } from './Message';
 import ChatInput from './ChatInput';
+import { queryDb } from '../../utils/db';
 
 const ChatPage: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -16,24 +17,26 @@ const ChatPage: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Fetch and log configuration on mount from chrome.storage
+  // Fetch configuration from DB on mount
   useEffect(() => {
     const fetchConfig = async () => {
       try {
-        // Read from chrome.storage.local
-        const storageResult = await browser.storage.local.get('userConfiguration');
-        console.log('[ChatPage] Raw Storage Result for config:', storageResult);
+        // Read from the database using queryDb
+        const sql = 'SELECT config_json FROM user_configuration WHERE id = 1;';
+        const result = await queryDb(sql); 
+        console.log('[ChatPage] Raw DB Result for config:', result);
         
-        if (storageResult && storageResult.userConfiguration) {
-          const config = storageResult.userConfiguration;
-          console.log('[ChatPage] Loaded User Configuration from storage:', config);
-          // You can store this config in state if needed for ChatPage logic
+        // Parse the result (assuming PGlite returns an array of objects)
+        if (result && Array.isArray(result) && result.length > 0 && result[0].config_json) {
+          const config = JSON.parse(result[0].config_json);
+          console.log('[ChatPage] Loaded User Configuration from DB:', config);
+          // You can store this config in state if needed 
           // setLoadedConfig(config); 
         } else {
-          console.log('[ChatPage] No user configuration found in chrome.storage.local.');
+          console.log('[ChatPage] No user configuration found in DB.');
         }
       } catch (error) {
-        console.error('[ChatPage] Error loading configuration from chrome.storage.local:', error);
+        console.error('[ChatPage] Error loading configuration from DB:', error);
       }
     };
 

@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../src/components/ui/select";
-import { sendMessage } from '../../lib/messaging';
+import { sendMessage } from '../../utils/messaging';
 
 const avatarSrc = "/images/scarlett-holding-dress.png"; 
 

@@ -4,6 +4,8 @@ import OnInstallPage from './OnInstallPage'; // Renamed, corresponds to provider
 import ModelSelectionPage from './ModelSelectionPage'; // The next step
 // Import the payload type from ModelSelectionPage
 import { type SelectionPayload } from './ModelSelectionPage';
+// Import the REFFACTORED db utility
+import { execDb, queryDb } from '../../utils/db'; 
 
 type OnboardingStep = 'provider-selection' | 'model-selection' | 'complete'; // Add complete step
 
@@ -30,15 +32,39 @@ function OnboardingRouter() {
         ...payload     
     };
 
-    console.log("OnboardingRouter: Saving full configuration to chrome.storage.local:", fullConfig);
+    console.log("OnboardingRouter: Saving full configuration:", fullConfig);
 
     try {
-      // Save directly to chrome.storage.local
-      await browser.storage.local.set({ userConfiguration: fullConfig });
-      console.log("OnboardingRouter: Configuration saved successfully to chrome.storage.local.");
+      const configJson = JSON.stringify(fullConfig);
 
-      // Add a small delay just in case storage needs a tick
-      await new Promise(resolve => setTimeout(resolve, 50)); 
+      // --- Manual UPSERT logic --- 
+      console.log('[OnboardingRouter] Checking for existing configuration...');
+      const selectSql = `SELECT id FROM user_configuration WHERE id = ?;`;
+      const existingConfig = await queryDb(selectSql, [1]); // Use queryDb
+
+      if (existingConfig && existingConfig.length > 0) {
+        // --- UPDATE existing config --- 
+        console.log('[OnboardingRouter] Existing configuration found. Updating...');
+        const updateSql = `
+          UPDATE user_configuration 
+          SET config_json = ?, updated_at = CURRENT_TIMESTAMP 
+          WHERE id = ?;
+        `;
+        await execDb(updateSql, [configJson, 1]);
+        console.log('[OnboardingRouter] Update successful.');
+      } else {
+        // --- INSERT new config --- 
+        console.log('[OnboardingRouter] No existing configuration found. Inserting...');
+        const insertSql = `
+          INSERT INTO user_configuration (id, config_json, updated_at)
+          VALUES (?, ?, CURRENT_TIMESTAMP);
+        `;
+        await execDb(insertSql, [1, configJson]);
+        console.log('[OnboardingRouter] Insert successful.');
+      }
+      // --------------------------
+
+      console.log("OnboardingRouter: Configuration saved successfully.");
 
       // --- Proceed to open new tab and close current one --- 
       const currentTab = await browser.tabs.getCurrent();
@@ -49,9 +75,9 @@ function OnboardingRouter() {
         await browser.tabs.remove(currentTab.id);
       }
 
-    } catch (storageError: any) { // Catch potential storage errors
-        console.error("OnboardingRouter: Error saving configuration to chrome.storage.local:", storageError);
-        setError(`Failed to save configuration: ${storageError.message || String(storageError)}`);
+    } catch (dbError: any) { // Catch potential DB or messaging errors
+        console.error("OnboardingRouter: Error saving configuration:", dbError);
+        setError(`Failed to save configuration: ${dbError.message || String(dbError)}`);
     }
     
   }, [savedConfig]);

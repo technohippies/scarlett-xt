@@ -17,7 +17,9 @@ declare global {
   const fakeBrowser: typeof import('wxt/testing')['fakeBrowser']
   const initializeSchema: typeof import('/media/xo42/th427/Code/scarlett-wxt-storybook/utils/db')['initializeSchema']
   const injectScript: typeof import('wxt/utils/inject-script')['injectScript']
+  const onMessage: typeof import('/media/xo42/th427/Code/scarlett-wxt-storybook/utils/messaging')['onMessage']
   const queryDb: typeof import('/media/xo42/th427/Code/scarlett-wxt-storybook/utils/db')['queryDb']
+  const sendMessage: typeof import('/media/xo42/th427/Code/scarlett-wxt-storybook/utils/messaging')['sendMessage']
   const storage: typeof import('wxt/utils/storage')['storage']
   const useAppConfig: typeof import('wxt/utils/app-config')['useAppConfig']
 }
@@ -50,4 +52,7 @@ declare global {
   // @ts-ignore
   export type { ScriptPublicPath, InjectScriptOptions } from 'wxt/utils/inject-script'
   import('wxt/utils/inject-script')
+  // @ts-ignore
+  export type { OllamaStreamChunkStatus, OllamaStreamChunk, OllamaChatRequest, ChatMessage, ClipData, DbExecRequest, DbQueryRequest, ProtocolMap } from '/media/xo42/th427/Code/scarlett-wxt-storybook/utils/messaging'
+  import('/media/xo42/th427/Code/scarlett-wxt-storybook/utils/messaging')
 }

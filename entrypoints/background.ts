@@ -1,10 +1,10 @@
 import browser from 'webextension-polyfill';
-import { onMessage, sendMessage, setupCentralListener } from '../lib/messaging';
+import { onMessage, sendMessage, type ProtocolMap } from '~/utils/messaging';
 
 console.log('Background script loaded.');
 
 // --- Offscreen Document Management ---
-const OFFSCREEN_DOCUMENT_PATH = '/offscreen.html'; // Path to your offscreen document HTML
+const OFFSCREEN_DOCUMENT_PATH = 'offscreen.html'; // Path to your offscreen document HTML
 
 async function hasOffscreenDocument(): Promise<boolean> {
   // Check if the document is already open.
@@ -39,13 +39,16 @@ async function setupOffscreenDocument() {
 // console.log('[Background] Temporarily skipped initial offscreen setup call for testing.');
 
 // Define the structure of the data expected from the clipper popup
+/*
 interface ClipData {
   title: string;
   url: string;
   tags?: string[]; // Add optional tags array
 }
+*/
 
 // Define the structure for Ollama API response
+/*
 interface OllamaTag {
   name: string;
   // other properties like modified_at, size, digest etc. are ignored for now
@@ -54,6 +57,7 @@ interface OllamaTag {
 interface OllamaTagsResponse {
   models: OllamaTag[];
 }
+*/
 
 // defineBackground is globally available here thanks to WXT
 export default defineBackground(() => {
@@ -61,118 +65,68 @@ export default defineBackground(() => {
 
   // --- Setup the central message listener --- 
   // This allows `onMessage` calls below to work.
-  setupCentralListener();
+  // setupCentralListener();
 
   // --- Listener for clipping requests from popup ---
-  onMessage<ClipData>('clipPage', async (message) => {
+  onMessage('clipPage', async (message) => {
     console.log('Background: Received clipPage message', message.data);
+    const { title, url /*, tags */ } = message.data; // Destructure imported ClipData
 
-    const { title, url, tags } = message.data; // Destructure tags
+    const sql = `INSERT INTO clips (title, url) VALUES (?, ?);`;
+    const params = [title, url]; 
 
-    if (!title || !url) {
-      console.error('Background: Invalid clip data received.');
-      return; // Or send an error response
-    }
-
-    // Ensure the offscreen document is running before attempting to send message
+    console.log('Background: Sending dbExec message to offscreen for clipping...');
     try {
-      await setupOffscreenDocument();
-    } catch (error) {
-      console.error('[Background] Failed to setup offscreen document:', error);
-      browser.notifications.create(`clip-offscreen-error-${Date.now()}`, {
-          type: 'basic',
-          iconUrl: browser.runtime.getURL('/icon/128.png'),
-          title: 'Clipping Error',
-          message: `Failed to initialize the database service. Error: ${error instanceof Error ? error.message : String(error)}`,
-          priority: 1
-      });
-      return; // Stop processing if offscreen setup failed
-    }
-
-    // Prepare SQL to insert into the clips table
-    // Using ON CONFLICT DO NOTHING because the URL is unique
-    // TODO: Update schema/insert if tags need to be saved
-    const sql = `
-      INSERT INTO clips (title, url)
-      VALUES ($1, $2)
-      ON CONFLICT (url) DO NOTHING;
-    `;
-    const params = [title, url]; // Tags are not currently saved
-
-    console.log('Background: Sending exec command to offscreen for clipping...');
-    try {
-      // Send message to the offscreen document to execute the SQL
-      const response = await sendMessage('exec', 
-        {
-           // Specify the target for the message (important if offscreen.ts checks it)
-           // target: 'offscreen', // Removed as offscreen listener doesn't check
-           sql: sql, 
-           params: params 
-        }
-      );
-      console.log('Background: Offscreen exec response:', response);
+      // Use the NEW dbExec message type
+      const dbResult = await sendMessage('dbExec', { sql: sql, params: params });
+      console.log('Background: Offscreen dbExec response:', dbResult);
       
-      // Optionally, notify the content script or update UI based on the response
-      if (response?.status === 'success') {
-        console.log(`Background: Successfully clipped ${url}`);
-        // Maybe send a notification?
-        browser.notifications.create(`clip-success-${Date.now()}`, {
-          type: 'basic',
-          iconUrl: browser.runtime.getURL('/icon/128.png'), // Ensure icon path is correct
-          title: 'Bookmark Saved', // Updated title
-          message: `Saved: ${title}`,
-          priority: 0
-        });
-      } else {
-         console.error('Background: Offscreen document failed to execute clip SQL:', response?.error);
-         // Handle error - maybe notify user?
-         browser.notifications.create(`clip-error-${Date.now()}`, {
-          type: 'basic',
-          iconUrl: browser.runtime.getURL('/icon/128.png'),
-          title: 'Bookmark Saving Failed', // Updated title
-          message: `Could not save ${title}. Error: ${response?.error || 'Unknown reason'}`,
-          priority: 1
-        });
-      }
+      // Notify success (no need to check status in response, error would throw)
+      console.log(`Background: Successfully clipped ${url}`);
+      browser.notifications.create(`clip-success-${Date.now()}`, {
+        type: 'basic',
+        iconUrl: browser.runtime.getURL('/icon/128.png'), 
+        title: 'Bookmark Saved',
+        message: `Saved: ${title}`,
+        priority: 0
+      });
 
     } catch (error) {
-      console.error('Background: Error sending message to offscreen document:', error);
-       browser.notifications.create(`clip-comm-error-${Date.now()}`, {
+      // Errors from sendMessage or the offscreen handler will be caught here
+      console.error('Background: Error executing clip via offscreen:', error);
+       browser.notifications.create(`clip-error-${Date.now()}`, {
           type: 'basic',
           iconUrl: browser.runtime.getURL('/icon/128.png'),
-          title: 'Bookmark Saving Error', // Updated title
-          message: `Failed to communicate with the database service. Is the offscreen document running?`,
+          title: 'Bookmark Saving Failed', 
+          message: `Could not save ${title}. Error: ${error instanceof Error ? error.message : String(error)}`,
           priority: 1
         });
     }
   });
 
   // --- Listener to fetch Ollama models ---
-  onMessage<{ endpoint: string }, { success: boolean; models?: {id: string, name: string}[]; error?: string }>(
-    'getOllamaModels',
-    async (message) => {
-      console.log('Background: Received getOllamaModels message', message.data);
-      const { endpoint } = message.data;
-      if (!endpoint) {
-        return { success: false, error: 'Ollama endpoint not provided.' };
-      }
-
-      try {
-        const response = await fetch(`${endpoint}/api/tags`);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch Ollama models: ${response.status} ${response.statusText}`);
-        }
-        const data: OllamaTagsResponse = await response.json();
-        // Transform the response into the Model[] format
-        const models = data.models.map(tag => ({ id: tag.name, name: tag.name }));
-        console.log('Background: Successfully fetched Ollama models:', models);
-        return { success: true, models: models };
-      } catch (error: any) { // Catch any type of error
-        console.error('Background: Error fetching Ollama models:', error);
-        return { success: false, error: error.message || 'Unknown error fetching models.' };
-      }
+  onMessage('getOllamaModels', async (message) => {
+    console.log('Background: Received getOllamaModels message', message.data);
+    const { endpoint } = message.data;
+    if (!endpoint) {
+      return { success: false, error: 'Ollama endpoint not provided.' };
     }
-  );
+
+    try {
+      const response = await fetch(`${endpoint}/api/tags`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch Ollama models: ${response.status} ${response.statusText}`);
+      }
+      // Assuming OllamaTagsResponse is defined elsewhere or implicitly typed
+      const data = await response.json(); 
+      const models = data.models.map((tag: { name: string }) => ({ id: tag.name, name: tag.name }));
+      console.log('Background: Successfully fetched Ollama models:', models);
+      return { success: true, models: models };
+    } catch (error: any) { // Catch any type of error
+      console.error('Background: Error fetching Ollama models:', error);
+      return { success: false, error: error.message || 'Unknown error fetching models.' };
+    }
+  });
 
   // --- Add other background listeners here (e.g., alarms, other messages) ---
 
