@@ -53,60 +53,55 @@ export const FlashcardCreatorPopup: React.FC<FlashcardCreatorPopupProps> = ({
   const [isRegeneratingCloze, setIsRegeneratingCloze] = useState(false);
 
   useEffect(() => {
-    let dotInterval: NodeJS.Timeout | null = null;
-
-    if (!selectedText) {
-        setIsLoadingInitial(false);
-        return;
-    }
-
     const generateInitialCards = async () => {
-        setFlashcardFront(''); setFlashcardBack(''); setClozeText('');
-        setIsLoadingInitial(true);
-        setLoadingDots('.');
-        dotInterval = setInterval(() => { setLoadingDots(prev => prev === '...' ? '.' : prev + '.'); }, 400);
+      setIsLoadingInitial(true);
+      setFlashcardFront('');
+      setFlashcardBack('');
+      setClozeText('');
 
-        console.log(`[Popup] Requesting INITIAL generation via onGenerate for:`, selectedText);
-        try {
-            await onGenerate(selectedText);
-            console.log("[Popup] Initial generation request sent.");
-        } catch (error) {
-            console.error("[Popup] Error triggering initial generation via onGenerate:", error);
-        } finally {
-             setIsLoadingInitial(false);
-             if (dotInterval) clearInterval(dotInterval);
-        }
+      console.log(`[Popup] Requesting INITIAL generation via onGenerate for:`, selectedText);
+      try {
+        await onGenerate(selectedText);
+        console.log("[Popup] Initial generation request sent (promise resolved).");
+      } catch (error) {
+        console.error("[Popup] Error triggering initial generation via onGenerate:", error);
+      }
     };
 
     generateInitialCards();
-    return () => { if (dotInterval) clearInterval(dotInterval); };
-
   }, [selectedText, onGenerate]);
 
   useEffect(() => {
     console.log("[Popup] generatedFlashcard prop changed:", generatedFlashcard);
+    setIsRegeneratingFlashcard(false);
     if (generatedFlashcard) {
-        setFlashcardFront(generatedFlashcard.front);
-        setFlashcardBack(generatedFlashcard.back);
+      setFlashcardFront(generatedFlashcard.front);
+      setFlashcardBack(generatedFlashcard.back);
+      setIsLoadingInitial(false);
     }
   }, [generatedFlashcard]);
 
   useEffect(() => {
-     console.log("[Popup] generatedCloze prop changed:", generatedCloze);
+    console.log("[Popup] generatedCloze prop changed:", generatedCloze);
+    setIsRegeneratingCloze(false);
     if (generatedCloze) {
-        setClozeText(generatedCloze.text);
+      setClozeText(generatedCloze.text);
+      setIsLoadingInitial(false);
     }
   }, [generatedCloze]);
 
   useEffect(() => {
     if (flashcardRegenTrigger === 0) return;
     const regenerateFlashcard = async () => {
-        setIsRegeneratingFlashcard(true);
-        console.log(`[Popup] Triggering regeneration (Flashcard) via onGenerate`);
-        try {
-            await onGenerate(selectedText);
-        } catch (error) { console.error("[Popup] Error triggering flashcard regen:", error); }
-          finally { setIsRegeneratingFlashcard(false); }
+      setIsRegeneratingFlashcard(true);
+      setFlashcardFront('');
+      setFlashcardBack('');
+      console.log(`[Popup] Triggering regeneration (Flashcard) via onGenerate`);
+      try {
+        await onGenerate(selectedText);
+      } catch (error) {
+        console.error("[Popup] Error triggering flashcard regen:", error);
+      }
     };
     regenerateFlashcard();
   }, [flashcardRegenTrigger, selectedText, onGenerate]);
@@ -114,15 +109,31 @@ export const FlashcardCreatorPopup: React.FC<FlashcardCreatorPopupProps> = ({
   useEffect(() => {
     if (clozeRegenTrigger === 0) return;
     const regenerateCloze = async () => {
-        setIsRegeneratingCloze(true);
-        console.log(`[Popup] Triggering regeneration (Cloze) via onGenerate`);
-        try {
-            await onGenerate(selectedText);
-        } catch (error) { console.error("[Popup] Error triggering cloze regen:", error); }
-         finally { setIsRegeneratingCloze(false); }
+      setIsRegeneratingCloze(true);
+      setClozeText('');
+      console.log(`[Popup] Triggering regeneration (Cloze) via onGenerate`);
+      try {
+        await onGenerate(selectedText);
+      } catch (error) {
+        console.error("[Popup] Error triggering cloze regen:", error);
+      }
     };
     regenerateCloze();
   }, [clozeRegenTrigger, selectedText, onGenerate]);
+
+  // Effect for dot animation based on loading/regeneration state
+  useEffect(() => {
+    let dotInterval: NodeJS.Timeout | null = null;
+    // Animate if initially loading OR either section is regenerating
+    if (isLoadingInitial || isRegeneratingFlashcard || isRegeneratingCloze) {
+      setLoadingDots('.'); // Reset dots when animation starts
+      dotInterval = setInterval(() => {
+        setLoadingDots(prev => (prev === '...' ? '.' : prev + '.'));
+      }, 400);
+    }
+    // Cleanup function for this effect
+    return () => { if (dotInterval) clearInterval(dotInterval); };
+  }, [isLoadingInitial, isRegeneratingFlashcard, isRegeneratingCloze]); // Depend on all loading/regen states
 
   const handleSave = () => {
     const backContentToSave = translatedFlashcardBack ?? flashcardBack;
@@ -149,14 +160,29 @@ export const FlashcardCreatorPopup: React.FC<FlashcardCreatorPopupProps> = ({
   };
 
   const loadingPlaceholder = `Generating${loadingDots}`;
-  const isBusy = isLoadingInitial || isParentGenerating || isRegeneratingFlashcard || isRegeneratingCloze || isTranslatingFlashcard || isTranslatingCloze;
-  const isFlashcardBusy = isLoadingInitial || isParentGenerating || isRegeneratingFlashcard || isTranslatingFlashcard;
-  const isClozeBusy = isLoadingInitial || isParentGenerating || isRegeneratingCloze || isTranslatingCloze;
+  const isBusy = isLoadingInitial || isRegeneratingFlashcard || isRegeneratingCloze || isTranslatingFlashcard || isTranslatingCloze;
+  const isFlashcardBusy = isRegeneratingFlashcard || isTranslatingFlashcard;
+  const isClozeBusy = isRegeneratingCloze || isTranslatingCloze;
   const canSave = !isBusy && (flashcardFront || clozeText);
+
+  // Debug log before render
+  console.log('[Popup Render Debug]', {
+    isLoadingInitial,
+    isRegeneratingFlashcard,
+    isRegeneratingCloze,
+    flashcardFront,
+    clozeText,
+    loadingPlaceholder
+  });
 
   return (
     <div className="max-w-xl h-[540px] p-4 bg-background text-foreground border border-border rounded-lg shadow-md flex flex-col gap-3">
       <div className="flex-grow overflow-y-auto pr-2 flex flex-col gap-3">
+
+        {/* Removed Temporary Debug Info */}
+        {/* {isRegeneratingFlashcard && <p className="text-xs text-red-500">DEBUG: isRegenFlash=true, placeholder={loadingPlaceholder}</p>} */}
+        {/* {isRegeneratingCloze && <p className="text-xs text-red-500">DEBUG: isRegenCloze=true, placeholder={loadingPlaceholder}</p>} */}
+
         <fieldset className="flex flex-col gap-3">
           <div className="flex justify-between items-center min-h-[36px]">
             <legend className="text-lg font-semibold px-1 flex items-center gap-2">
@@ -188,11 +214,11 @@ export const FlashcardCreatorPopup: React.FC<FlashcardCreatorPopupProps> = ({
           </div>
           <div>
             <Label htmlFor="flashcard-front">Front</Label>
-            <Textarea id="flashcard-front" className="mt-1" value={flashcardFront} onChange={(e) => setFlashcardFront(e.target.value)} placeholder={isFlashcardBusy ? loadingPlaceholder : "Topic/Concept..."} rows={1} disabled={isFlashcardBusy} />
+            <Textarea id="flashcard-front" className="mt-1" value={flashcardFront} onChange={(e) => setFlashcardFront(e.target.value)} placeholder={isLoadingInitial || isRegeneratingFlashcard ? loadingPlaceholder : "Topic/Concept..."} rows={1} disabled={isFlashcardBusy} />
           </div>
            <div>
             <Label htmlFor="flashcard-back">Back</Label>
-            <Textarea id="flashcard-back" className="mt-1" value={translatedFlashcardBack ?? flashcardBack} onChange={(e) => setFlashcardBack(e.target.value)} placeholder={isFlashcardBusy ? loadingPlaceholder : "Fact/Definition..."} disabled={isFlashcardBusy} />
+            <Textarea id="flashcard-back" className="mt-1" value={translatedFlashcardBack ?? flashcardBack} onChange={(e) => setFlashcardBack(e.target.value)} placeholder={isLoadingInitial || isRegeneratingFlashcard ? loadingPlaceholder : "Fact/Definition..."} disabled={isFlashcardBusy} />
           </div>
         </fieldset>
 
@@ -230,7 +256,7 @@ export const FlashcardCreatorPopup: React.FC<FlashcardCreatorPopupProps> = ({
               id="cloze-text"
               value={translatedClozeText ?? clozeText}
               onChange={(e) => setClozeText(e.target.value)}
-              placeholder={isClozeBusy ? loadingPlaceholder : "Sentence with {{c1::cloze}}..."}
+              placeholder={isLoadingInitial || isRegeneratingCloze ? loadingPlaceholder : "Sentence with {{c1::cloze}}..."}
               rows={5}
               disabled={isClozeBusy}
             />
