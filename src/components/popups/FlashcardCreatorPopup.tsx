@@ -147,25 +147,44 @@ export const FlashcardCreatorPopup: React.FC<FlashcardCreatorPopupProps> = ({
     if (type === 'flashcard') {
         if (!flashcardBack || isTranslatingFlashcard) return;
         setIsTranslatingFlashcard(true);
+        setTranslatedFlashcardBack('Translating...');
         console.log('[Popup] Translating Flashcard Back:', flashcardBack);
-        await new Promise(resolve => setTimeout(resolve, 800));
-        setTranslatedFlashcardBack(`[Translated] ${flashcardBack}`);
-        setIsTranslatingFlashcard(false);
+        try {
+            const translated = await sendMessage('translateText', {
+                text: flashcardBack,
+                targetLanguage: 'Mandarin Chinese'
+            });
+
+            if (typeof translated === 'string' && translated) {
+                setTranslatedFlashcardBack(translated);
+            } else {
+                console.error('[Popup] Translation failed or returned invalid response:', translated);
+                setTranslatedFlashcardBack('[Translation Error]');
+            }
+        } catch (error) {
+            console.error('[Popup] Error sending translation message:', error);
+            setTranslatedFlashcardBack('[Translation Error]');
+        } finally {
+            setIsTranslatingFlashcard(false);
+        }
     } else {
         if (!clozeText || isTranslatingCloze) return;
         setIsTranslatingCloze(true);
-        console.log('[Popup] Translating Cloze:', clozeText);
+        setTranslatedClozeText('Translating...');
+        console.log('[Popup] Translating Cloze Answer (Simulation - Full text translation not implemented yet):', clozeText);
+
         await new Promise(resolve => setTimeout(resolve, 800));
         const match = clozeText.match(/\{\{c1::(.*?)\}\}/);
         let finalCloze = clozeText;
         if (match && match[1]) {
             const originalAnswer = match[1];
             if (!originalAnswer.startsWith('[Translated]')) {
-                const translatedAnswer = `[Translated] ${originalAnswer}`;
+                const translatedAnswer = `[Simulated Translation] ${originalAnswer}`;
                 finalCloze = clozeText.replace(`{{c1::${originalAnswer}}}`, `{{c1::${translatedAnswer}}}`);
             }
         } else {
             console.warn("Could not extract cloze answer for translation simulation.");
+            finalCloze = '[Translation Error]';
         }
         setTranslatedClozeText(finalCloze);
         setIsTranslatingCloze(false);

@@ -18,5 +18,5 @@ declare module '#imports' {
   export { InvalidMatchPattern, MatchPattern } from 'wxt/utils/match-patterns';
   export { fakeBrowser } from 'wxt/testing';
   export { execDb, queryDb, createBookmark, createFlashcard, createChatMessage, getChatHistory, getDueFlashcards } from '../utils/db';
-  export { sendMessage, onMessage, OllamaStreamChunkStatus, OllamaStreamChunk, OllamaChatRequest, ChatMessage, ClipData, DbExecRequest, DbQueryRequest, ProtocolMap } from '../utils/messaging';
+  export { sendMessage, onMessage, OllamaStreamChunkStatus, OllamaStreamChunk, OllamaChatRequest, ChatMessage, ClipData, DbExecRequest, DbQueryRequest, ProtocolMap, Message } from '../utils/messaging';
 }

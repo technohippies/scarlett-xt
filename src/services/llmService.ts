@@ -2,7 +2,7 @@
 
 import { queryDb } from '../../utils/db'; // To load config
 import { sendMessage, OllamaStreamChunk } from '../../utils/messaging'; // For streaming responses back
-import type { LLMProvider, LLMChatProvider, ProviderStreamChatRequest, LLMEmbeddingProvider, ProviderEmbeddingRequest } from './providers/types';
+import type { LLMProvider, LLMChatProvider, ProviderStreamChatRequest, LLMEmbeddingProvider } from './providers/types';
 
 // Add provider imports
 import { ollamaProvider } from './providers/ollama';
@@ -34,14 +34,6 @@ export interface OpenRouterConfig extends LLMConfigBase {
   // Embedding model might be implicit or a specific one if they offer it
 }
 
-// Add GroqConfig
-export interface GroqConfig extends LLMConfigBase {
-  provider: 'groq';
-  apiKey: string;
-  // Groq doesn't currently offer embedding models
-  embeddingModel?: undefined; 
-}
-
 // Add VeniceConfig (even if empty for now)
 export interface VeniceConfig extends LLMConfigBase {
   provider: 'venice';
@@ -50,7 +42,7 @@ export interface VeniceConfig extends LLMConfigBase {
   // Add wallet address or other relevant fields later
 }
 
-export type LLMUserConfig = OllamaConfig | OpenRouterConfig | GroqConfig | VeniceConfig; // Union type
+export type LLMUserConfig = OllamaConfig | OpenRouterConfig | VeniceConfig; // Union type
 
 // --- Service Argument Types ---
 
@@ -127,8 +119,12 @@ export async function streamChatResponse(request: { prompt: string; history: any
     await provider.streamChat(providerRequest);
   } catch (error) {
     console.error(`[llmService] Error during streamChat for ${config.provider}:`, error);
+    // Ensure the error object conforms to OllamaStreamChunk
     sendMessage('ollamaResponse', {
-      status: 'error',
+      model: config.chatModel, // Use the model from the config
+      created_at: new Date().toISOString(), // Current timestamp
+      done: true, // Indicate the stream (or error transmission) is done
+      status: 'error', // Custom status field
       error: error instanceof Error ? error.message : String(error)
     }).catch(e => console.error("Failed to send error chunk to UI:", e));
   }
@@ -460,6 +456,61 @@ export async function generateFlashcardContentFromText(text: string): Promise<{
         console.error("--- Raw Content Received ---");
         console.error(fullResponse);
         console.error("--- End Raw Content ---");
+        return null;
+    }
+}
+
+// --- Translation Function ---
+
+/**
+ * Translates the given text to the target language using the configured LLM.
+ */
+export async function translateText(textToTranslate: string, targetLanguage: string): Promise<string | null> {
+    console.log(`[llmService] Translating text to ${targetLanguage}: "${textToTranslate.substring(0, 50)}..."`);
+
+    const config = await loadUserConfig();
+    if (!config) {
+        console.error("[llmService translateText] Cannot translate: LLM config not loaded.");
+        return null;
+    }
+
+    const provider = getProvider(config);
+    if (!provider?.chatCompletion) {
+        console.error(`[llmService translateText] Provider ${config.provider} does not support 'chatCompletion'.`);
+        return null;
+    }
+
+    // Simple translation prompt
+    const prompt = `Translate the following text accurately to ${targetLanguage}. Output ONLY the translated text, nothing else:
+
+Text to translate:
+"""
+${textToTranslate}
+"""
+
+Translated text:`;
+
+    console.log(`[llmService translateText] Sending translation prompt to ${config.provider}...`);
+
+    try {
+        const response = await provider.chatCompletion({
+            prompt: prompt,
+            config: config,
+            history: [], // No history needed
+        });
+
+        const translatedText = response?.message?.content?.trim();
+
+        if (!translatedText) {
+            console.error("[llmService translateText] LLM response was empty or invalid.");
+            return null;
+        }
+
+        console.log("[llmService translateText] Received translation:", translatedText);
+        return translatedText;
+
+    } catch (error) {
+        console.error("[llmService translateText] Error during translation LLM call:", error);
         return null;
     }
 } 
