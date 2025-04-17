@@ -51,15 +51,15 @@ export const FlashcardReviewer: React.FC<FlashcardReviewerProps> = ({ card }) =>
           <div className="flex justify-center gap-[10%]">
             {/* Aiming for ~40% width each with a gap */}
             <Button 
-              variant="outline" // Or destructive
-              className="w-[45%]"
+              variant="ghost" // Changed from destructive
+              className="w-[45%] text-destructive hover:bg-destructive/10 hover:text-destructive-foreground"
               onClick={() => handleReview('again')}
               size="lg"
             >
               Again
             </Button>
             <Button 
-              variant="secondary" // Or default
+              variant="default" // Keep as primary blue
               className="w-[45%]"
               onClick={() => handleReview('good')}
               size="lg"

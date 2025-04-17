@@ -93,7 +93,6 @@ function App() {
           url: pageInfo.url,
           title: pageInfo.title,
           tags: currentTags,
-          // embedding: null // TODO: Add embedding generation later
         });
         await createChatMessage({ role: 'bookmark', bookmark_id: newBookmark.id });
         setStatus('Bookmark saved successfully!');

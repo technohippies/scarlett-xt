@@ -7,7 +7,7 @@ import browser, { type Runtime } from 'webextension-polyfill'; // Needed for get
 import dbSchemaSql from '../utils/dbSchema.sql?raw'; // Use relative path
 // Restore @webext-core/messaging imports
 import { onMessage, type ProtocolMap, type DbExecRequest, type DbQueryRequest } from '../utils/messaging'; 
-import { vector } from '@electric-sql/pglite/vector'; // Import the vector extension
+// import { vector } from '@electric-sql/pglite/vector'; // Remove unused import
 
 // Log immediately when the script starts executing
 console.log('[Offscreen Script] Top-level execution start.'); 
@@ -34,26 +34,33 @@ export default defineUnlistedScript(() => {
     console.log('[Offscreen initDb] Initializing PGlite...');
     dbReadyPromise = (async () => {
       try {
-        const pgliteModuleUrl = browser.runtime.getURL('electric-sql/index.js'); // Correct path for PGlite module import
+        // Correct path should point to the 'dist' subdirectory now
+        const pgliteModuleUrl = browser.runtime.getURL('@electric-sql/dist/index.js'); 
         console.log(`[Offscreen initDb] Dynamically importing PGlite from ${pgliteModuleUrl}`);
         const pgliteModule = await import(/* @vite-ignore */ pgliteModuleUrl);
         const PGlite = (pgliteModule.PGlite || pgliteModule.default);
         if (!PGlite) throw new Error("PGlite class not found in dynamic import");
         console.log("[Offscreen initDb] Dynamically imported PGlite class.");
         
-        // Initialize PGlite with the vector extension
-        const instance = new PGlite('idb://scarlett-wxt-db', {
+        // Initialize PGlite WITHOUT the vector extension for now
+        const instance = new PGlite('idb://scarlett-wxt-db'/*, {
             extensions: { vector } // Pass the imported extension
-        });
+        }*/);
 
-        console.log("[Offscreen initDb] PGlite instance created with vector extension, awaiting ready...");
+        console.log("[Offscreen initDb] PGlite instance created (NO vector ext), awaiting ready...");
         await instance.ready;
         console.log('[Offscreen initDb] PGlite instance ready.');
         
         // --- Apply Schema Directly After Ready --- 
-        console.log('[Offscreen initDb] Applying database schema...');
-        await instance.exec(dbSchemaSql); // PGlite exec takes no params
-        console.log('[Offscreen initDb] Database schema applied successfully.');
+        console.log('[Offscreen initDb] Applying database schema START...');
+        try {
+            await instance.exec(dbSchemaSql); // PGlite exec takes no params
+            console.log('[Offscreen initDb] Applying database schema SUCCESS.');
+        } catch (schemaError) {
+             console.error('[Offscreen initDb] Applying database schema FAILED:', schemaError);
+             // Re-throw or handle as appropriate, maybe prevent db assignment
+             throw schemaError; 
+        }
         // ------------------------------------------
 
         db = instance;
@@ -95,14 +102,52 @@ export default defineUnlistedScript(() => {
   onMessage('dbQuery', async (message) => {
     console.log('[Offscreen onMessage(dbQuery)] Received:', message);
     const { sql, params } = message.data as DbQueryRequest; // Type assertion
+    let dbInstance;
     try {
-      const dbInstance = await initDb();
-      console.log(`[Offscreen onMessage(dbQuery)] Executing SQL: ${sql} with params:`, params);
+      // Ensure DB is initialized
+      dbInstance = await initDb();
+      console.log('[Offscreen onMessage(dbQuery)] DB initialized.');
+
+      // *** REMOVE CHECK FOR VECTOR EXTENSION ***
+      /*
+      try {
+          console.log('[Offscreen onMessage(dbQuery)] Checking for pg_extension vector...');
+          const checkResult = await dbInstance.query("SELECT extname FROM pg_extension WHERE extname = 'vector';");
+          if (checkResult?.rows?.length > 0) {
+              console.log('[Offscreen onMessage(dbQuery)] Vector extension FOUND in pg_extension.');
+          } else {
+              console.warn('[Offscreen onMessage(dbQuery)] Vector extension NOT FOUND in pg_extension.');
+              // Attempt to list all extensions for debugging
+              try {
+                  const allExt = await dbInstance.query("SELECT extname FROM pg_extension;");
+                  console.log('[Offscreen onMessage(dbQuery)] All available extensions:', allExt?.rows);
+              } catch (listError) { 
+                  console.error('[Offscreen onMessage(dbQuery)] Error listing all extensions:', listError);
+              }
+          }
+      } catch (checkError) {
+           console.error('[Offscreen onMessage(dbQuery)] Error checking for vector extension:', checkError);
+      }
+      */
+      // *** END CHECK ***
+
+      // Log the query and params about to be executed
+      console.log('[Offscreen onMessage(dbQuery)] SQL BEFORE EXEC:', sql);
+      try {
+          // Use JSON.stringify for potentially complex params, handle errors
+          console.log('[Offscreen onMessage(dbQuery)] PARAMS BEFORE EXEC:', JSON.stringify(params || []));
+      } catch (stringifyError) {
+           console.error('[Offscreen onMessage(dbQuery)] Error stringifying params:', stringifyError);
+           console.log('[Offscreen onMessage(dbQuery)] RAW PARAMS BEFORE EXEC:', params);
+      }
+      
+      // Execute the original query
+      console.log(`[Offscreen onMessage(dbQuery)] Executing ORIGINAL SQL...`); // Simplified log
       const result = await dbInstance.query(sql, params || []); // Pass SQL and params
-      console.log('[Offscreen onMessage(dbQuery)] Execution successful, result:', result);
+      console.log('[Offscreen onMessage(dbQuery)] ORIGINAL SQL execution successful, result:', result);
       return result; // Return the result (rows, etc.)
     } catch (error: any) {
-      console.error('[Offscreen onMessage(dbQuery)] Error executing SQL:', error);
+      console.error('[Offscreen onMessage(dbQuery)] Error executing ORIGINAL SQL:', error);
       // Re-throw the error
       throw new Error(`DB query failed: ${error.message || String(error)}`);
     }

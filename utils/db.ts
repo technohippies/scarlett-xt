@@ -93,12 +93,10 @@ export async function queryDb(sql: string, params?: any[]): Promise<any> {
 export async function createBookmark(bookmarkData: Pick<Bookmark, 'url'> & Partial<Omit<Bookmark, 'id' | 'saved_at'> >): Promise<Bookmark> {
     const sql = `
         INSERT INTO bookmarks (url, title, tags, embedding)
-        VALUES (?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4)
         RETURNING id, url, title, saved_at, tags, embedding;
     `;
-    // Note: Handling Blob/embedding requires specific pglite/messaging logic.
-    // This assumes the offscreen worker handles Uint8Array or similar.
-    // We might need to adjust how `embedding` is passed.
+    // Embedding should now be string | null
     const params = [
         bookmarkData.url,
         bookmarkData.title ?? null,
@@ -120,6 +118,8 @@ export async function createBookmark(bookmarkData: Pick<Bookmark, 'url'> & Parti
 export async function createFlashcard(flashcardData: Omit<Flashcard, 'id' | 'created_at' | keyof FSRSCard | 'due' | 'state' | 'last_review'>, now: Date = new Date()): Promise<Flashcard> {
     // Get initial FSRS state using ts-fsrs
     const initialCardState = createEmptyCard(now);
+    // Get the string representation of the state enum
+    const stateString = State[initialCardState.state]; 
 
     const sql = `
         INSERT INTO flashcards (
@@ -128,7 +128,7 @@ export async function createFlashcard(flashcardData: Omit<Flashcard, 'id' | 'cre
             due, stability, difficulty, elapsed_days, scheduled_days, 
             reps, lapses, state, last_review
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
         RETURNING *; 
     `;
     
@@ -151,13 +151,19 @@ export async function createFlashcard(flashcardData: Omit<Flashcard, 'id' | 'cre
         initialCardState.scheduled_days,
         initialCardState.reps,
         initialCardState.lapses,
-        initialCardState.state, // State enum value
+        stateString, // Use the string representation of the state
         initialCardState.last_review?.toISOString() ?? null // Store as ISO string or null
     ];
 
     const result = await queryDb(sql, params);
     if (!result?.rows?.[0]) throw new Error("Failed to create flashcard");
-    return result.rows[0] as Flashcard;
+    // Ensure the returned state is correctly typed if needed elsewhere immediately,
+    // although reading from DB later should yield the string.
+    const savedFlashcard = result.rows[0] as Flashcard;
+    // PGlite might return the numeric enum value if the column type affinity is integer,
+    // but since it's TEXT, it should return the string we inserted.
+    // If issues arise, manually cast here: savedFlashcard.state = State[savedFlashcard.state as number] as unknown as State;
+    return savedFlashcard;
 }
 
 /**
@@ -169,7 +175,7 @@ export async function createFlashcard(flashcardData: Omit<Flashcard, 'id' | 'cre
 export async function createChatMessage(messageData: Omit<ChatMessageDb, 'id' | 'timestamp'>): Promise<ChatMessageDb> {
     const sql = `
         INSERT INTO chat_messages (role, content, bookmark_id, flashcard_id)
-        VALUES (?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4)
         RETURNING *;
     `;
     const params = [

@@ -7,7 +7,7 @@ export interface Bookmark {
   title?: string;
   saved_at: string; // ISO string format from DB
   tags?: string; // Comma-separated or JSON string
-  embedding?: Blob; // Or ArrayBuffer/Uint8Array depending on how pglite handles BLOB
+  embedding?: string | null; // Temporarily TEXT NULL in DB
 }
 
 // Matches the 'flashcards' table, integrating FSRS fields

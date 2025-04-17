@@ -30,3 +30,25 @@ To add storybook:
      },
    },
    ```
+
+
+because of electric-sql pglite wasm not working with wxt
+    mkdir -p /media/xo42/th427/Code/scarlett-wxt-storybook/public/@electric-sql/pglite
+    # Core JS file
+    cp /media/xo42/th427/Code/scarlett-wxt-storybook/node_modules/@electric-sql/pglite/index.js /media/xo42/th427/Code/scarlett-wxt-storybook/public/@electric-sql/pglite/
+
+    # Core WASM and data
+    cp /media/xo42/th427/Code/scarlett-wxt-storybook/node_modules/@electric-sql/pglite/postgres.wasm /media/xo42/th427/Code/scarlett-wxt-storybook/public/@electric-sql/pglite/
+    cp /media/xo42/th427/Code/scarlett-wxt-storybook/node_modules/@electric-sql/pglite/postgres.data /media/xo42/th427/Code/scarlett-wxt-storybook/public/@electric-sql/pglite/
+
+    # JS chunks (use wildcard)
+    cp /media/xo42/th427/Code/scarlett-wxt-storybook/node_modules/@electric-sql/pglite/chunk-*.js /media/xo42/th427/Code/scarlett-wxt-storybook/public/@electric-sql/pglite/
+
+    # Vector extension directory (use -R for recursive)
+    cp -R /media/xo42/th427/Code/scarlett-wxt-storybook/node_modules/@electric-sql/pglite/vector /media/xo42/th427/Code/scarlett-wxt-storybook/public/@electric-sql/pglite/
+
+    # Worker directory (use -R for recursive)
+    cp -R /media/xo42/th427/Code/scarlett-wxt-storybook/node_modules/@electric-sql/pglite/worker /media/xo42/th427/Code/scarlett-wxt-storybook/public/@electric-sql/pglite/
+
+    # Templating JS file (if needed)
+    cp /media/xo42/th427/Code/scarlett-wxt-storybook/node_modules/@electric-sql/pglite/templating.js /media/xo42/th427/Code/scarlett-wxt-storybook/public/@electric-sql/pglite/
