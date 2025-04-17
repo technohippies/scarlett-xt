@@ -9,7 +9,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../src/components/ui/select";
-import { sendMessage } from '../../utils/messaging';
+import { sendMessage, onMessage, ProtocolMap, GetOllamaModelsResponse } from '../../utils/messaging';
+import type { Message } from '@webext-core/messaging';
 
 const avatarSrc = "/images/scarlett-holding-dress.png"; 
 
@@ -93,122 +94,121 @@ const ModelSelectionPage: React.FC<ModelSelectionPageProps> = ({
   // Determine if this provider requires an embedding model (only Ollama/local)
   const needsEmbedding = providerConfig?.provider === 'ollama';
 
+  // --- Effect to TRIGGER model loading --- 
   useEffect(() => {
-    const loadModels = async () => {
-      if (!providerConfig) {
-        setError("Provider configuration is missing.");
-        setIsLoading(false);
-        return;
+    // Only trigger when providerConfig is available
+    if (!providerConfig) {
+      // Optional: set error or keep loading until config arrives
+      console.warn("[ModelSelectionPage] Waiting for providerConfig...");
+      // setError("Provider configuration is missing."); 
+      // setIsLoading(false);
+      return;
+    }
+
+    console.log("ModelSelectionPage received config, triggering model load:", providerConfig);
+    setIsLoading(true); // Set loading when triggering
+    setError(null);
+    setChatModels([]);
+    setEmbeddingModels([]);
+    setSelectedChatModel("");
+    setSelectedEmbeddingModel("");
+
+    try {
+      const config = providerConfig;
+      if (config.provider === 'openrouter') {
+        console.log("Loading OpenRouter models...");
+        const models = openRouterTier === 'free' ? openRouterFreeModels : [];
+        // --- Directly process OpenRouter models (no background fetch needed) --
+        handleModelResult({ success: true, models: models }, config.provider);
+      } else if (config.provider === 'groq') {
+        console.log("Loading Groq models (hardcoded)...");
+        // --- Directly process Groq models (no background fetch needed) --
+        handleModelResult({ success: true, models: groqModels }, config.provider);
+      } else { // Ollama or other local
+        // --- Send message to background to fetch local models --- 
+        const endpointToCall = config.endpoint || 'http://localhost:11434';
+        console.log(`[ModelSelectionPage] Sending getOllamaModels message for endpoint: ${endpointToCall}`);
+        // Correctly pass the payload expected by (data: { endpoint: string }) => void
+        sendMessage('getOllamaModels', { endpoint: endpointToCall });
+        // Keep isLoading true - listener will set it to false
       }
+    } catch (err: any) {
+      // Catch errors during the *triggering* phase (e.g., config issues)
+      console.error("Error triggering model load:", err);
+      setError(err.message || "An unknown error occurred initiating model load.");
+      setIsLoading(false); // Stop loading on trigger error
+    }
+  }, [providerConfig, openRouterTier]); // Re-run if config or tier changes
 
-      console.log("ModelSelectionPage received config:", providerConfig);
-      setIsLoading(true);
-      setError(null);
-      setChatModels([]); // Clear previous models
-      setEmbeddingModels([]); // Clear previous models
-      setSelectedChatModel("");
-      setSelectedEmbeddingModel("");
+  // --- Effect to LISTEN for model results from background --- 
+  useEffect(() => {
+    const listener = onMessage('getOllamaModelsResult', (message: Message<ProtocolMap, 'getOllamaModelsResult'>) => {
+        console.log("[ModelSelectionPage] Received getOllamaModelsResult:", message.data);
+        // Pass the result and provider type to the handler function
+        handleModelResult(message.data, providerConfig?.provider);
+    });
 
-      try {
-        const config = providerConfig;
-        let allFetchedModels: Model[] = [];
+    // Cleanup listener on unmount
+    return () => {
+      // Call the listener function directly to remove it
+      listener(); 
+    };
+  }, [providerConfig]); // Re-run listener setup if providerConfig changes (though provider type is used inside)
 
-        if (config.provider === 'openrouter') {
-          console.log("Loading OpenRouter models...");
-          if (openRouterTier === 'free') {
-             allFetchedModels = openRouterFreeModels;
-          } else {
-             console.log("Fetching paid models (not implemented yet)");
-             allFetchedModels = []; 
-          }
-          // OpenRouter doesn't need separate embedding model selection, handled below
-        } else if (config.provider === 'groq') { // Add Groq case
-          console.log("Loading Groq models (hardcoded)...");
-          allFetchedModels = groqModels;
-          // Groq doesn't have separate embedding models
-        } else { // Ollama (local)
-          // Local provider - Fetch both chat and embedding models
-          console.log(`Requesting models for local provider: ${config.provider}...`);
-          
-          // --- Fetch ALL local models from background --- 
-          console.log("Fetching ALL local models from background...");
-          // Use the endpoint from the provider config
-          const endpointToCall = config.endpoint || 'http://localhost:11434'; // Default if not provided
-          const allModelsResponse = await sendMessage('getOllamaModels', { endpoint: endpointToCall });
+  // --- Function to process model results (from background or direct) --- 
+  const handleModelResult = (result: GetOllamaModelsResponse, providerType: string) => {
+      if (!result || !result.success || !result.models) {
+        console.error("Failed to fetch/process models:", result?.error);
+        setError(result?.error || `Failed to fetch models for ${providerType}.`);
+        setChatModels([]);
+        setEmbeddingModels([]);
+      } else {
+        console.log(`Processing models for ${providerType}:`, result.models);
+        let allFetchedModels = result.models;
+        setError(null);
 
-          if (!allModelsResponse?.success || !allModelsResponse?.models) {
-            console.error("Failed to fetch models from background:", allModelsResponse?.error);
-            throw new Error(allModelsResponse?.error || `Failed to fetch models from ${endpointToCall}.`);
-          }
-          allFetchedModels = allModelsResponse.models;
-          console.log("ALL local models response:", allFetchedModels);
-          // ----------------------------------------------
-        }
-
-        // --- Process fetched models --- 
-
-        // 1. Chat Models
+        // Chat Models
         const sortedChatModels = sortModels(allFetchedModels);
         setChatModels(sortedChatModels);
         const defaultChatModel =
-          sortedChatModels.find(m => preferredModelPatterns.some(p => p.test(m.id))) || // Find preferred
-          sortedChatModels.find(m => m.id.toLowerCase().includes('llama3-70b')) || // Fallback to llama 70b (Groq)
-          sortedChatModels.find(m => m.id.toLowerCase().includes('gemma')) || // Fallback to any gemma
-          sortedChatModels[0]; // Fallback to first
+          sortedChatModels.find(m => preferredModelPatterns.some(p => p.test(m.id))) ||
+          sortedChatModels.find(m => m.id.toLowerCase().includes('llama3-70b')) ||
+          sortedChatModels.find(m => m.id.toLowerCase().includes('gemma')) ||
+          sortedChatModels[0];
         setSelectedChatModel(defaultChatModel?.id || "");
-        console.log("Using chat models:", sortedChatModels);
         console.log("Default chat model set to:", defaultChatModel?.id);
 
-        // 2. Embedding Models
-        let fetchedEmbeddingModels: Model[] = [];
-        if (config.provider === 'ollama') { 
-          // --- Filter for likely embedding models --- 
+        // Embedding Models (only for Ollama)
+        if (providerType === 'ollama') {
           const embeddingKeywords = ['embed', 'bge', 'minilm', 'paraphrase', 'instructor'];
-          const likelyEmbeddingModels = allFetchedModels.filter(model => { 
+          const likelyEmbeddingModels = allFetchedModels.filter((model: Model) => {
             const modelIdLower = model.id.toLowerCase();
             return embeddingKeywords.some(keyword => modelIdLower.includes(keyword));
           });
-          console.log("Filtered embedding models:", likelyEmbeddingModels);
-          // Use the filtered list from now on
-          fetchedEmbeddingModels = likelyEmbeddingModels; 
+
+          if (likelyEmbeddingModels.length > 0) {
+            const sortedEmbeddingModels = [...likelyEmbeddingModels].sort((a, b) => {
+              const aIsBGE = a.id.includes('bge-m3');
+              const bIsBGE = b.id.includes('bge-m3');
+              if (aIsBGE && !bIsBGE) return -1;
+              if (!aIsBGE && bIsBGE) return 1;
+              return a.name.localeCompare(b.name);
+            });
+            setEmbeddingModels(sortedEmbeddingModels);
+            setSelectedEmbeddingModel(sortedEmbeddingModels[0]?.id || "");
+             console.log("Default embedding model set to:", sortedEmbeddingModels[0]?.id);
+          } else {
+            console.warn("No likely embedding models found for Ollama after filtering.");
+            setEmbeddingModels([]);
+            setSelectedEmbeddingModel("");
+          }
         } else {
-          // Handle case where no embedding models were found/returned for local provider
           setEmbeddingModels([]);
           setSelectedEmbeddingModel("");
-          if (config.provider === 'ollama') { 
-            console.warn("No likely embedding models found for local provider after filtering.");
-          }
         }
-
-        // Sort and set embedding models (if any)
-        if (fetchedEmbeddingModels.length > 0) {
-          // Sort embedding models (e.g., prioritize bge-m3)
-          const sortedEmbeddingModels = [...fetchedEmbeddingModels].sort((a, b) => {
-            const aIsBGE = a.id.includes('bge-m3');
-            const bIsBGE = b.id.includes('bge-m3');
-            if (aIsBGE && !bIsBGE) return -1;
-            if (!aIsBGE && bIsBGE) return 1;
-            // Add other preferences if needed (e.g., nomic)
-            return a.name.localeCompare(b.name);
-          });
-          setEmbeddingModels(sortedEmbeddingModels);
-          
-          // Default to the first model in the sorted list (which will be bge-m3 if present)
-          setSelectedEmbeddingModel(sortedEmbeddingModels[0]?.id || "");
-          console.log("Using embedding models:", sortedEmbeddingModels);
-          console.log("Default embedding model set to:", sortedEmbeddingModels[0]?.id);
-        }
-
-      } catch (err: any) {
-        console.error("Error loading models:", err);
-        setError(err.message || "An unknown error occurred.");
-      } finally {
-        setIsLoading(false);
       }
-    };
-
-    loadModels();
-  }, [providerConfig, openRouterTier]); 
+      setIsLoading(false); // Set loading false after processing result (success or error)
+  };
 
   const handleChatModelSelect = (modelId: string) => {
     setSelectedChatModel(modelId);
@@ -220,9 +220,8 @@ const ModelSelectionPage: React.FC<ModelSelectionPageProps> = ({
   };
 
   const handleConfirmClick = async () => {
-    // Check if the necessary model(s) are selected
-    const isLocal = providerConfig?.provider === 'ollama'; // Only Ollama needs embedding model
-    const needsEmbedding = isLocal; // Explicitly state who needs embedding selection
+    const isLocal = providerConfig?.provider === 'ollama';
+    const needsEmbedding = isLocal; 
 
     if (!selectedChatModel || (needsEmbedding && !selectedEmbeddingModel))
     {
@@ -234,7 +233,7 @@ const ModelSelectionPage: React.FC<ModelSelectionPageProps> = ({
     let requiredPermissions: browser.Permissions.Permissions = { origins: [], permissions: [] };
     let permissionsToRequest: browser.Permissions.Permissions = { origins: [], permissions: [] };
 
-    // --- Determine Required Host Permission --- 
+    // Determine Required Host Permission
     if (isLocal && providerConfig?.endpoint) {
       try {
         const url = new URL(providerConfig.endpoint);
@@ -243,16 +242,14 @@ const ModelSelectionPage: React.FC<ModelSelectionPageProps> = ({
       } catch (urlError: any) {
         console.error("[Permissions] Invalid endpoint URL for permission check:", providerConfig.endpoint, urlError);
         setError(`Invalid provider endpoint URL: ${providerConfig.endpoint}`);
-        return; // Stop if URL is invalid
+        return;
       }
     }
-
-    // --- Determine Required Optional Permissions ---
-    // Add history permission requirement
+    
+    // Determine Required Optional Permissions (e.g., history)
     requiredPermissions.permissions?.push("history");
-    // Add other optional permissions here if needed later
 
-    // --- Check Which Permissions Are Missing ---
+    // Check Which Permissions Are Missing
     if ((requiredPermissions.origins && requiredPermissions.origins.length > 0) || 
         (requiredPermissions.permissions && requiredPermissions.permissions.length > 0)) 
     {
@@ -261,7 +258,6 @@ const ModelSelectionPage: React.FC<ModelSelectionPageProps> = ({
         console.log(`[Permissions] Already has all required permissions? ${hasPermissions}`);
         
         if (!hasPermissions) {
-            // Figure out *which* specific permissions are missing to request them precisely
             if (requiredPermissions.origins && requiredPermissions.origins.length > 0) {
                 const hasOrigins = await browser.permissions.contains({ origins: requiredPermissions.origins });
                 if (!hasOrigins) {
@@ -275,7 +271,6 @@ const ModelSelectionPage: React.FC<ModelSelectionPageProps> = ({
                 }
             }
 
-            // If any permissions are missing, request them
             if ((permissionsToRequest.origins && permissionsToRequest.origins.length > 0) || 
                 (permissionsToRequest.permissions && permissionsToRequest.permissions.length > 0)) 
             {
@@ -283,26 +278,23 @@ const ModelSelectionPage: React.FC<ModelSelectionPageProps> = ({
                 const granted = await browser.permissions.request(permissionsToRequest);
                 console.log(`[Permissions] Permission request result: ${granted}`);
                 if (!granted) {
-                    // Construct a more informative error message
                     let deniedPerms: string[] = [];
                     if (permissionsToRequest.origins) deniedPerms.push(...permissionsToRequest.origins);
                     if (permissionsToRequest.permissions) deniedPerms.push(...permissionsToRequest.permissions);
                     setError(`Permission denied for: ${deniedPerms.join(', ')}. Cannot proceed without required permissions.`);
-                    return; // Stop if permissions denied
+                    return;
                 }
             } else {
-                 console.log("[Permissions] All required permissions were already granted individually."); // Should not happen if contains(all) was false, but good sanity check
+                 console.log("[Permissions] All required permissions were already granted individually.");
             }
         }
       } catch (permError: any) {
         console.error(`[Permissions] Error checking or requesting permissions:`, permError);
         setError(`Error handling permissions: ${permError.message}`);
-        return; // Stop on error
+        return;
       }
     }
-    // ---------------------------------------------
 
-    // If we reached here, all necessary permissions are granted
     console.log("Confirming model selection:", selectedChatModel, needsEmbedding ? selectedEmbeddingModel : '(N/A)');
     onSelectionConfirmed({
       chatModel: selectedChatModel,

@@ -71,18 +71,18 @@ export default defineBackground(() => {
   // --- Listener for clipping requests from popup ---
   onMessage('clipPage', async (message) => {
     console.log('Background: Received clipPage message', message.data);
-    const { title, url /*, tags */ } = message.data; // Destructure imported ClipData
+    const { title, url } = message.data; // Destructure imported ClipData
 
     const sql = `INSERT INTO clips (title, url) VALUES (?, ?);`;
-    const params = [title, url]; 
+    const params = [title, url];
 
     console.log('Background: Sending dbExec message to offscreen for clipping...');
     try {
-      // Use the NEW dbExec message type
-      const dbResult = await sendMessage('dbExec', { sql: sql, params: params });
+      // Match the ProtocolMap definition: { data: DbExecRequest }
+      const dbResult = await sendMessage('dbExec', { data: { sql: sql, params: params } });
       console.log('Background: Offscreen dbExec response:', dbResult);
-      
-      // Notify success (no need to check status in response, error would throw)
+
+      // Notify success
       console.log(`Background: Successfully clipped ${url}`);
       browser.notifications.create(`clip-success-${Date.now()}`, {
         type: 'basic',
@@ -91,11 +91,9 @@ export default defineBackground(() => {
         message: `Saved: ${title}`,
         priority: 0
       });
-
     } catch (error) {
-      // Errors from sendMessage or the offscreen handler will be caught here
       console.error('Background: Error executing clip via offscreen:', error);
-       browser.notifications.create(`clip-error-${Date.now()}`, {
+      browser.notifications.create(`clip-error-${Date.now()}`, {
           type: 'basic',
           iconUrl: browser.runtime.getURL('/icon/128.png'),
           title: 'Bookmark Saving Failed', 
@@ -103,30 +101,55 @@ export default defineBackground(() => {
           priority: 1
         });
     }
+    // Handler returns void implicitly
   });
 
   // --- Listener to fetch Ollama models ---
   onMessage('getOllamaModels', async (message) => {
-    console.log('Background: Received getOllamaModels message', message.data);
+    console.log('[Background] Received getOllamaModels message', message.data);
     const { endpoint } = message.data;
+    const responseTarget = 'getOllamaModelsResult'; // Target for the response message
+
     if (!endpoint) {
-      return { success: false, error: 'Ollama endpoint not provided.' };
+      console.error('[Background] Error: Ollama endpoint not provided.');
+      sendMessage(responseTarget, { success: false, error: 'Ollama endpoint not provided.' })
+          .catch(e => console.error(`[Background] Failed to send ${responseTarget} error:`, e));
+      return;
     }
 
+    const fetchUrl = `${endpoint}/api/tags`;
+    console.log(`[Background] Attempting to fetch models from: ${fetchUrl}`);
     try {
-      const response = await fetch(`${endpoint}/api/tags`);
+      const fetchOptions = { method: 'GET', headers: { 'Accept': 'application/json' } };
+      console.log('[Background] Fetch options:', fetchOptions);
+      const response = await fetch(fetchUrl, fetchOptions);
+      console.log(`[Background] Fetch response status: ${response.status}, OK: ${response.ok}`);
+
       if (!response.ok) {
+        let errorBody = '[Could not read error body]';
+        try { errorBody = await response.text(); } catch {}
+        console.error(`[Background] Fetch failed: Status ${response.status}. Body:`, errorBody);
         throw new Error(`Failed to fetch Ollama models: ${response.status} ${response.statusText}`);
       }
-      // Assuming OllamaTagsResponse is defined elsewhere or implicitly typed
+      
       const data = await response.json(); 
-      const models = data.models.map((tag: { name: string }) => ({ id: tag.name, name: tag.name }));
-      console.log('Background: Successfully fetched Ollama models:', models);
-      return { success: true, models: models };
-    } catch (error: any) { // Catch any type of error
-      console.error('Background: Error fetching Ollama models:', error);
-      return { success: false, error: error.message || 'Unknown error fetching models.' };
+      // Ensure data.models exists and is an array before mapping
+      const models = Array.isArray(data?.models) ? data.models.map((tag: { name: string }) => ({ id: tag.name, name: tag.name })) : [];
+      console.log('[Background] Successfully fetched Ollama models:', models);
+      sendMessage(responseTarget, { success: true, models: models })
+        .catch(e => console.error(`[Background] Failed to send ${responseTarget} success:`, e));
+
+    } catch (error: any) { 
+      console.error('[Background] Error during fetch operation:', error);
+      let errorMessage = (error instanceof Error) ? error.message : 'Unknown error fetching models.';
+      // Add specific check for permission-like errors if possible (difficult without seeing the exact error)
+      if (errorMessage.includes('Failed to fetch')) { // Generic fetch failure often indicates network/permission issues
+          errorMessage += ". Ensure Ollama is running and reachable, and check extension host permissions.";
+      }
+      sendMessage(responseTarget, { success: false, error: errorMessage })
+        .catch(e => console.error(`[Background] Failed to send ${responseTarget} error:`, e));
     }
+    // Handler returns void implicitly
   });
 
   // --- Listener for Chat Requests ---
@@ -134,44 +157,62 @@ export default defineBackground(() => {
     console.log('Background: Received ollamaChatRequest', message.data);
     const { prompt, history } = message.data;
 
-    // Load config first
     const config = await loadUserConfig();
     if (!config) {
       console.error("Background: Cannot process chat request, user config not found.");
        sendMessage('ollamaResponse', {
+         model: 'unknown',
+         created_at: new Date().toISOString(),
+         done: true,
          status: 'error',
          error: "LLM configuration not found. Please set it up in the settings."
        }).catch(e => console.error("Failed to send config error message:", e));
-      throw new Error("LLM configuration not found.");
+      return; // Handler returns void
     }
  
-    // Pass to the llmService to handle provider logic and streaming
-    streamChatResponse({ prompt, history: history || [], config }); 
-    console.log("Background: streamChatResponse initiated (streaming runs in background).");
-    
-    // Return success acknowledgement
-    return { received: true };
+    try {
+      // Assuming streamChatResponse handles sending chunks via sendMessage('ollamaResponse', ...)
+      await streamChatResponse({ prompt, history: history || [], config }); 
+      console.log("Background: streamChatResponse processing initiated.");
+    } catch (streamError) {
+        // streamChatResponse should ideally handle its own errors and send error chunks,
+        // but we can log a fallback here.
+        console.error("[Background] Error invoking streamChatResponse:", streamError);
+        // Optionally send a final error chunk if streamChatResponse didn't
+         sendMessage('ollamaResponse', {
+           model: config.chatModel || 'unknown',
+           created_at: new Date().toISOString(),
+           done: true,
+           status: 'error',
+           error: streamError instanceof Error ? streamError.message : "Error during streaming"
+         }).catch(e => console.error("Failed to send stream error message:", e));
+    }
+    // Handler returns void implicitly
   });
 
   // --- Listener for Flashcard Content Generation ---
   onMessage('generateFlashcardContent', async (message) => {
     console.log('[Background] Received generateFlashcardContent message', message.data);
     const { text } = message.data;
+    const responseTarget = 'flashcardGenerationResult'; // Target for the response
+    
     if (!text) {
       console.error('[Background] No text provided for flashcard generation.');
-      return null; // Indicate failure
+      sendMessage(responseTarget, null).catch(e => console.error("Failed to send null result:", e));
+      return; // Handler returns void
     }
 
     try {
-        // Call the llmService function
         const result = await generateFlashcardContentFromText(text);
         console.log('[Background] Received result from llmService:', result);
-        return result; // Forward the result (or null) back to the popup
+        sendMessage(responseTarget, result)
+          .catch(e => console.error("Failed to send flashcard result:", e));
     } catch (error) {
         console.error('[Background] Error during flashcard generation:', error);
-        // Optionally, re-throw or return a specific error structure if needed by the popup
-        return null; // Indicate failure
+        sendMessage(responseTarget, null)
+          .catch(e => console.error("Failed to send error result:", e));
     }
+    // Handler returns void implicitly
   });
 
   // --- Listener for Chat History Requests ---

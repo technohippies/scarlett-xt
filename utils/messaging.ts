@@ -68,10 +68,10 @@ interface GetOllamaModelsRequest {
 interface OllamaModel {
   id: string;
   name: string;
-  // Add other fields if the background sends more
 }
 
-interface GetOllamaModelsResponse {
+// *** EXPORT this interface ***
+export interface GetOllamaModelsResponse {
   success: boolean;
   models?: OllamaModel[];
   error?: string;
@@ -80,32 +80,31 @@ interface GetOllamaModelsResponse {
 // Define the overall protocol map for type safety
 export interface ProtocolMap {
   // Message from Popup -> Background to trigger clipping
-  clipPage: (data: ClipData) => Promise<void>; // Assuming background doesn't directly return data here
+  clipPage: (data: ClipData) => void; // Should return void if background handles notifications
 
   // Message from UI -> Background to get available Ollama models
-  getOllamaModels: (data: GetOllamaModelsRequest) => Promise<GetOllamaModelsResponse>;
+  getOllamaModels: (data: { endpoint: string }) => void; // Request trigger
+  getOllamaModelsResult: GetOllamaModelsResponse; // Response with models or error
 
   // == DB Operations (UI/Background -> Offscreen) ==
-  // Execute SQL (no return value expected beyond success/error)
-  dbExec: (data: DbExecRequest) => Promise<{ rowsModified?: number } | void>; // PGlite exec might return rowsModified
-
-  // Query SQL (returns rows)
-  dbQuery: (data: DbQueryRequest) => Promise<any>; // Keep result type flexible for now
+  dbExec: { data: DbExecRequest }; // Expect object containing request data
+  dbQuery: { data: DbQueryRequest }; // Expect object containing request data
 
   // == Chat Messages ==
-  ollamaChatRequest: (data: OllamaChatRequest) => Promise<{ received: boolean }>;
-  ollamaResponse: OllamaStreamChunk;
-  getChatHistory: (data: { sessionId?: number | 'current' }) => Promise<ChatMessage[]>;
-  addSystemMessage: { content: string };
+  ollamaChatRequest: (data: OllamaChatRequest) => void; // Request trigger (stream handled separately)
+  ollamaResponse: OllamaStreamChunk; // Streamed chunks/result/error
+  getChatHistory: (data: { sessionId?: number | 'current' }) => Promise<ChatMessage[]>; // Direct request/response
+  addSystemMessage: { content: string }; // Simple message
 
   // == Flashcard Generation ==
-  generateFlashcardContent: { text: string };
+  generateFlashcardContent: (data: { text: string }) => void; // Request trigger
+  flashcardGenerationResult: { flashcard: { front: string; back: string }; cloze: { text: string } } | null; // Response
 
-  // New type for translation
-  translateText: { text: string; targetLanguage: string };
+  // == Translation ==
+  translateText: (data: { text: string; targetLanguage: string }) => Promise<string | null>; // Direct request/response for now
 
-  // New types for streamOllamaRequest and saveConfiguration
-  streamOllamaRequest: { prompt: string; history: ChatMessage[]; config: any }; // Use any for config if type import fails
+  // == Other existing types ==
+  streamOllamaRequest: { prompt: string; history: ChatMessage[]; config: any };
   saveConfiguration: { configJson: string };
   loadConfiguration: null;
   queryDb: { query: string; params?: any[] };
@@ -118,31 +117,12 @@ export interface Message<T extends keyof ProtocolMap> {
   data: ProtocolMap[T];
 }
 
-// Utility function to send typed messages
-export async function sendMessage<T extends keyof ProtocolMap>(
-  type: T,
-  data: ProtocolMap[T]
-): Promise<any> { // Consider refining the Promise return type if possible
-  try {
-    const response = await browser.runtime.sendMessage({ type, data });
-    // Handle potential errors returned structurally from the background
-    if (response?.status === 'error') {
-      console.error(`Error received from background for message type ${type}:`, response.message, response.error);
-      // Re-throw or return a specific error structure
-      throw new Error(response.message || 'Background script reported an error');
-    }
-    return response;
-  } catch (error) {
-    console.error(`Error sending message type ${type}:`, error);
-    throw error; // Re-throw the error for the caller to handle
-  }
-}
-
 // Create the typed messaging instance
 const messagingInstance = defineExtensionMessaging<ProtocolMap>();
 
 // Export the specific methods from the instance
 export const onMessage = messagingInstance.onMessage;
+export const sendMessage = messagingInstance.sendMessage;
 
 // REMOVE conflicting re-export
 // export type { ProtocolMap }; 
