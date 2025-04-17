@@ -66,31 +66,4 @@ export const LongBackOnly: Story = {
       'The `useState` hook allows functional components to manage local state.',
     id: 'ffb-long-back',
   },
-};
-
-export const NoFront: Story = {
-  args: {
-    frontText: '',
-    backText: 'This is the back text only.',
-    id: 'ffb-no-front',
-  },
-};
-
-export const NoBack: Story = {
-  args: {
-    frontText: 'This is the front text only.',
-    backText: '',
-    id: 'ffb-no-back',
-  },
-};
-
-export const NoText: Story = {
-  args: {
-    frontText: '',
-    backText: '',
-    id: 'ffb-no-text',
-  },
-  parameters: {
-      notes: "Component should render null if both front and back are empty."
-  }
 }; 

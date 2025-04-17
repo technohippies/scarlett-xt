@@ -18,36 +18,17 @@ const truncateText = (text: string, maxLength: number): string => {
     : text;
 };
 
-/** Finds the first Anki cloze, and styles it within the text if the whole text fits */
+/** Formats cloze text for display, truncating if necessary */
 const formatClozeDisplay = (text: string): React.ReactNode => {
   if (!text) return '[Empty Cloze Text]';
-
-  // Regex to find the first *full* Anki cloze block {{c[number]::...}}
-  const clozeRegex = /(.*?)({{c\d+::.*?}})(.*)/s;
-  const match = text.match(clozeRegex);
 
   // Check if the *original* text length exceeds the limit first
   if (text.length > CLOZE_TEXT_MAX_CHARS) {
     return truncateText(text, CLOZE_TEXT_MAX_CHARS);
   }
 
-  // If text fits AND a cloze is found, style the first cloze block
-  if (match) {
-    const beforeText = match[1];
-    const clozeBlock = match[2]; // The full {{c1::answer::hint}}
-    const afterText = match[3];
-
-    return (
-      <>
-        {beforeText}
-        <strong className="font-semibold">{clozeBlock}</strong>
-        {afterText}
-      </>
-    );
-  } else {
-    // No cloze found, return original text (already checked for length)
-    return text;
-  }
+  // If text fits, return the original text as is (no special styling needed)
+  return text;
 };
 
 export const FlashcardClozeMessage: React.FC<FlashcardClozeMessageProps> = ({

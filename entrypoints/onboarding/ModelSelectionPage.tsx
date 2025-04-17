@@ -314,7 +314,7 @@ const ModelSelectionPage: React.FC<ModelSelectionPageProps> = ({
       <div className="container mx-auto p-8 max-w-2xl flex flex-col items-center bg-card text-card-foreground rounded-lg shadow-lg">
         <img
           src={avatarSrc}
-          alt="Scarlett Wizard Avatar"
+          alt="Scarlett Offering Handshake"
           className="w-48 h-48 mb-6 object-contain"
         />
         <h1 className="text-3xl font-bold mb-3">Select Your Model(s)</h1>

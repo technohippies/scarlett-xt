@@ -54,11 +54,9 @@ export const FlashcardFrontBackMessage: React.FC<FlashcardFrontBackMessageProps>
 
       {/* Content */}
       <div className="flex-grow min-w-0">
-        {/* Display Front | Back format */}
-        <span className="text-gray-800">{displayFront || '[No Front]'}</span>
+        {displayFront && <span className="text-gray-800">{displayFront}</span>}
         {displayFront && displayBack && <span className="text-gray-400 mx-1">|</span>}
         {displayBack && <span className="text-gray-500">{displayBack}</span>}
-        {!displayFront && displayBack && <span className="text-gray-500">[No Front] | {displayBack}</span>} {/* Handle only back */}
       </div>
     </div>
   );
