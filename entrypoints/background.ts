@@ -1,6 +1,6 @@
 import browser from 'webextension-polyfill';
 import { onMessage, sendMessage, type ProtocolMap, OllamaStreamChunk } from '~/utils/messaging';
-import { loadUserConfig, streamChatResponse } from '../src/services/llmService'; // Use relative path for LLM service import
+import { loadUserConfig, streamChatResponse, generateFlashcardContentFromText } from '../src/services/llmService'; // Use relative path for LLM service import
 
 console.log('Background script loaded.');
 
@@ -151,6 +151,27 @@ export default defineBackground(() => {
     
     // Return success acknowledgement
     return { received: true };
+  });
+
+  // --- Listener for Flashcard Content Generation ---
+  onMessage('generateFlashcardContent', async (message) => {
+    console.log('[Background] Received generateFlashcardContent message', message.data);
+    const { text } = message.data;
+    if (!text) {
+      console.error('[Background] No text provided for flashcard generation.');
+      return null; // Indicate failure
+    }
+
+    try {
+        // Call the llmService function
+        const result = await generateFlashcardContentFromText(text);
+        console.log('[Background] Received result from llmService:', result);
+        return result; // Forward the result (or null) back to the popup
+    } catch (error) {
+        console.error('[Background] Error during flashcard generation:', error);
+        // Optionally, re-throw or return a specific error structure if needed by the popup
+        return null; // Indicate failure
+    }
   });
 
   // --- Listener for Chat History Requests ---

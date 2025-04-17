@@ -4,6 +4,10 @@ import { queryDb } from '../../utils/db'; // To load config
 import { sendMessage, OllamaStreamChunk } from '../../utils/messaging'; // For streaming responses back
 import type { LLMProvider, LLMChatProvider, ProviderStreamChatRequest, LLMEmbeddingProvider, ProviderEmbeddingRequest } from './providers/types';
 
+// Add provider imports
+import { ollamaProvider } from './providers/ollama';
+import { openRouterProvider } from './providers/openrouter';
+
 // --- Configuration Types ---
 
 // Reuse ChatMessage from messaging.ts if suitable, or redefine if needed
@@ -75,25 +79,23 @@ export interface EmbeddingResponse {
 /**
  * Loads the user's LLM configuration from the database.
  */
+let userConfigCache: LLMUserConfig | null = null;
 export async function loadUserConfig(): Promise<LLMUserConfig | null> {
-  console.log('[llmService] Loading user configuration...');
+  if (userConfigCache) return userConfigCache;
+  console.log('[llmService] Loading user configuration from DB...');
   try {
-    const sql = 'SELECT config_json FROM user_configuration WHERE id = 1;';
-    const result = await queryDb(sql);
+    const result = await queryDb('SELECT config_json FROM user_configuration WHERE id = 1;');
     if (result?.rows?.[0]?.config_json) {
       const config = JSON.parse(result.rows[0].config_json);
       console.log('[llmService] Loaded config:', config);
-      // Basic validation
-      if (!config.provider || !config.chatModel) throw new Error("Config missing provider/chatModel");
-      if (config.provider === 'ollama' && (!config.endpoint || !config.embeddingModel)) throw new Error("Ollama config missing endpoint/embeddingModel");
-      if (config.provider === 'openrouter' && !config.apiKey) throw new Error("OpenRouter config missing apiKey");
-      if (config.provider === 'groq' && !config.apiKey) throw new Error("Groq config missing apiKey");
-      return config as LLMUserConfig;
-    } 
-    console.log('[llmService] No configuration found.');
-    return null;
+      userConfigCache = config; // Cache the loaded config
+      return config;
+    } else {
+      console.warn('[llmService] No configuration found in database.');
+      return null;
+    }
   } catch (error) {
-    console.error('[llmService] Error loading or validating configuration:', error);
+    console.error('[llmService] Error loading configuration:', error);
     return null;
   }
 }
@@ -103,50 +105,32 @@ export async function loadUserConfig(): Promise<LLMUserConfig | null> {
  * Handles streaming chat responses from the configured LLM provider.
  * Sends chunks back via sendMessage('ollamaResponse', chunk).
  */
-export async function streamChatResponse(request: StreamChatRequest): Promise<void> {
-  const { config } = request;
-
-  const sendChunkCallback = (chunk: OllamaStreamChunk): void => {
-     sendMessage('ollamaResponse', chunk)
-       .catch(e => console.error(`[llmService] Failed to relay chunk:`, e));
-  };
-
-  if (!config) {
-    console.error("[llmService] streamChatResponse called with null config.");
-    sendChunkCallback({ status: 'error', error: 'LLM configuration is missing.' });
-    return;
-  }
-
+export async function streamChatResponse(request: { prompt: string; history: any[]; config: LLMUserConfig }): Promise<void> {
+  const { prompt, history, config } = request;
   console.log(`[llmService] Routing chat stream for provider: ${config.provider}`);
-
-  try {
-    let providerModule: LLMChatProvider;
-
-    // Use switch statement for provider routing
-    switch (config.provider) {
-      case 'ollama': { // Use block scope for imports
-        const { ollamaProvider } = await import('./providers/ollama');
-        providerModule = ollamaProvider;
-        break; // Exit switch
-      }
-      case 'openrouter': {
-        const { openRouterProvider } = await import('./providers/openrouter');
-        providerModule = openRouterProvider;
-        break; // Exit switch
-      }
-      default: {
-        console.error("[llmService] Unsupported provider found in config");
-        sendChunkCallback({ status: 'error', error: "Unsupported LLM provider" });
-        return; // Exit function
-      }
+  const provider = getProvider(config);
+  if (!provider) {
+    throw new Error(`Unsupported provider: ${config.provider}`);
+  }
+  if (!provider.streamChat) {
+    throw new Error(`Provider ${config.provider} does not support streaming chat.`);
+  }
+  const providerRequest: ProviderStreamChatRequest = {
+    prompt,
+    history,
+    config,
+    sendChunk: (chunk) => {
+      sendMessage('ollamaResponse', chunk).catch(e => console.error("Failed to send chunk to UI:", e));
     }
-
-    // Call the provider's method (providerModule is guaranteed to be assigned)
-    await providerModule.streamChat({ ...request, sendChunk: sendChunkCallback });
-
-  } catch (error: any) {
-     console.error(`[llmService] Error during chat stream routing or execution:`, error);
-     sendChunkCallback({ status: 'error', error: `LLM Service Error: ${error.message || String(error)}` });
+  };
+  try {
+    await provider.streamChat(providerRequest);
+  } catch (error) {
+    console.error(`[llmService] Error during streamChat for ${config.provider}:`, error);
+    sendMessage('ollamaResponse', {
+      status: 'error',
+      error: error instanceof Error ? error.message : String(error)
+    }).catch(e => console.error("Failed to send error chunk to UI:", e));
   }
 }
 
@@ -206,17 +190,85 @@ interface FlashcardGenerationResponse {
   };
 }
 
-// Helper function to create the prompt
+// Helper function to create the prompt (Updated for Readability & Clarity)
 function createFlashcardPrompt(selectedText: string, sourceUrl?: string): string {
-    // Base prompt structure
-    let prompt = `Given the following text selection, generate two types of flashcards: a concise front/back pair and a cloze deletion card. The goal is efficient learning.\n\nText Selection:\n\"${selectedText}\"`;
+    // Use a multi-line template literal for better readability
+    let prompt = `
+Generate two types of flashcards from the text below: a concise "Flashcard" (Front/Back) and a "Cloze" deletion card.
 
-    if (sourceUrl) {
-        prompt += `\nSource URL (for context): ${sourceUrl}`;
+Text Selection:
+"""
+${selectedText}
+"""
+${sourceUrl ? `\\nSource URL (for context): ${sourceUrl}` : ''}
+
+Instructions:
+
+1.  **Flashcard (Front/Back):**
+    *   Front: A short topic or concept (max 8 words).
+    *   Back: A concise fact or definition related to the front (max 8 words).
+    *   **IMPORTANT:** Do NOT include trailing punctuation. Back should ONLY contain the fact, no filler.
+
+2.  **Cloze Card:**
+    *   Create a single sentence using the main idea.
+    *   Replace the single most *meaningful* keyword/phrase with {{c1::answer}}.
+    *   **AVOID** deleting trivial words (the, is, a) or the obvious main subject.
+
+3.  **Output Format:**
+    *   Return ONLY a valid JSON object. No extra text, explanations, or markdown.
+    *   Use this EXACT structure:
+    \`\`\`json
+    {
+      "flashcard": { "front": "topic/concept", "back": "concise fact" },
+      "cloze": { "text": "Sentence with {{c1::answer}} deletion." }
     }
+    \`\`\`
 
-    prompt += `\n\nInstructions:\n1.  **Front/Back Card:** Create a very concise term/definition pair. Identify the core concept or relationship. Avoid full questions. Prefer short phrases.\n2.  **Cloze Card:** Create a single sentence incorporating the main idea of the text selection. Replace the single most important keyword or phrase with [...]. Do not use markdown for the cloze brackets.\n3.  **Output Format:** Return ONLY a valid JSON object matching this EXACT structure (no extra text, explanations, or markdown formatting):\n    \`\`\`json\n    {\n      \"frontBack\": { \"front\": \"concise front text\", \"back\": \"concise back text\" },\n      \"cloze\": { \"text\": \"Sentence with [...] cloze deletion.\" }\n    }\n    \`\`\`\n\nExamples:\n\nInput Text: \"The Eiffel Tower, located in Paris, France, was completed in 1889.\"\nOutput JSON:\n\`\`\`json\n{\n  \"frontBack\": { \"front\": \"Eiffel Tower Location\", \"back\": \"Paris, France\" },\n  \"cloze\": { \"text\": \"The Eiffel Tower, located in Paris, France, was completed in [...].\" }\n}\n\`\`\`\n\nInput Text: \"Photosynthesis is the process used by plants to convert light energy into chemical energy.\"\nOutput JSON:\n\`\`\`json\n{\n  \"frontBack\": { \"front\": \"Photosynthesis\", \"back\": \"Plant process converting light to chemical energy\" },\n  \"cloze\": { \"text\": \"[...] is the process used by plants to convert light energy into chemical energy.\" }\n}\n\`\`\`\n\nInput Text: \"React is a JavaScript library for building user interfaces.\"\nOutput JSON:\n\`\`\`json\n{\n  \"frontBack\": { \"front\": \"React\", \"back\": \"JS library for UIs\" },\n  \"cloze\": { \"text\": \"React is a JavaScript library for building [...].\" }\n}\n\`\`\`\n\nNow, generate the flashcards for the provided text selection. Output JSON:\n`;
-    return prompt;
+Examples:
+
+--- Example 1 ---
+Input Text: "The Eiffel Tower, located in Paris, France, was completed in 1889."
+Output JSON:
+\`\`\`json
+{
+  "flashcard": { "front": "Eiffel Tower Location", "back": "Paris, France" },
+  "cloze": { "text": "The Eiffel Tower, located in Paris, France, was completed in {{c1::1889}}" }
+}
+\`\`\`
+(Flashcard: Good - concise topic/fact. Cloze: Good - specific detail deleted.)
+
+--- Example 2 ---
+Input Text: "Photosynthesis is the process used by plants to convert light energy into chemical energy."
+Output JSON:
+\`\`\`json
+{
+  "flashcard": { "front": "Photosynthesis", "back": "Converts light to chemical energy" },
+  "cloze": { "text": "Photosynthesis is the process used by plants to convert {{c1::light energy}} into chemical energy" }
+}
+\`\`\`
+(Flashcard: Good - concept/definition. Cloze: Good - key concept deleted.)
+
+--- Example 3 ---
+Input Text: "The Wachowskis wrote and directed the Matrix film series."
+Output JSON:
+\`\`\`json
+{
+  "flashcard": { "front": "The Matrix Directors", "back": "The Wachowskis" },
+  "cloze": { "text": "The {{c1::Wachowskis}} wrote and directed the Matrix film series" }
+}
+\`\`\`
+(Flashcard: Good - specific role. Cloze: Better - deleted the directors instead of the trivial 'Matrix'.)
+
+--- Example 4 (Bad Examples) ---
+Input Text: "React is a JavaScript library for building user interfaces."
+Bad Flashcard Back: "React is a JS library for UIs." (Trailing period)
+Bad Flashcard Back: "It is a library for building UIs" (Exceeds 8 words, filler)
+Bad Cloze: "React is a JavaScript library for building {{c1::user interfaces}}" (Okay, but less ideal than deleting 'JavaScript library')
+Bad Cloze: "{{c1::React}} is a JavaScript library for building user interfaces." (Trivial deletion of main subject)
+
+Now, generate the flashcards for the provided text selection. Output ONLY the JSON object:
+`;
+    return prompt.trim(); // Trim leading/trailing whitespace from the template literal
 }
 
 /**
@@ -295,6 +347,119 @@ export async function generateFlashcardPair(selectedText: string, sourceUrl?: st
 
     } catch (error) {
         console.error("[llmService generateFlashcardPair] Error during flashcard generation:", error);
+        return null;
+    }
+}
+
+// --- Helper Function to get Provider --- 
+// (Assumes UserConfig has a provider field like 'ollama' or 'openrouter')
+function getProvider(config: LLMUserConfig): LLMChatProvider | null {
+    switch (config.provider) {
+        case 'ollama':
+            return ollamaProvider;
+        case 'openrouter':
+            return openRouterProvider;
+        // Add cases for other providers like 'lmstudio', 'jan' if they have specific provider objects
+        default:
+            // Handle local providers that might share Ollama logic but have different IDs
+            if ((config as any).endpoint) { 
+                // If endpoint exists, assume it might be an Ollama-compatible API
+                // TODO: Refine this logic if local providers need distinct handling
+                console.warn(`[llmService] Using ollamaProvider for potentially compatible provider: ${config.provider}`);
+                return ollamaProvider; 
+            }
+            console.error(`[llmService] Unsupported provider found in config: ${config.provider}`);
+            return null;
+    }
+}
+
+// --- Flashcard Generation Function (Updated Parsing) ---
+export async function generateFlashcardContentFromText(text: string): Promise<{
+    // Updated structure
+    flashcard: { front: string; back: string };
+    cloze: { text: string };
+  } | null> {
+    console.log("[llmService] Generating flashcard content for text:", text.substring(0, 50) + "...");
+    const config = await loadUserConfig();
+    if (!config) throw new Error("LLM configuration not found.");
+
+    const provider = getProvider(config);
+    if (!provider) throw new Error(`Unsupported provider: ${config.provider}`);
+
+    if (!provider.chatCompletion) {
+        console.error(`[llmService] Provider ${config.provider} does not support non-streaming 'chatCompletion'. Cannot generate flashcards this way.`);
+        return null;
+    }
+
+    // Use the updated prompt function
+    const prompt = createFlashcardPrompt(text);
+
+    console.log("[llmService] Sending flashcard generation prompt to chatCompletion...");
+    // console.log("--- PROMPT ---"); // Optional: Log the full prompt for debugging
+    // console.log(prompt);
+    // console.log("--- END PROMPT ---");
+
+    let fullResponse = '';
+    try {
+        const response = await provider.chatCompletion({
+            prompt: prompt,
+            config: config,
+            history: [],
+        });
+
+        if (!response?.message?.content) {
+            console.error("[llmService] LLM response via chatCompletion was empty or invalid.");
+            return null;
+        }
+        fullResponse = response.message.content;
+
+    } catch (error) {
+        console.error("[llmService] Error during LLM call (chatCompletion) for flashcard generation:", error);
+        return null;
+    }
+
+    // --- Parse the entire LLM response as JSON ---
+    console.log("[llmService] Received raw LLM response for parsing:", fullResponse);
+    try {
+        // Attempt to find JSON block even if there's surrounding text/markdown
+        const jsonMatch = fullResponse.match(/```json\s*([\s\S]*?)\s*```|({[\s\S]*})/);
+        if (!jsonMatch || !jsonMatch[1] && !jsonMatch[2]) {
+             console.error("[llmService] Could not find JSON block in the LLM response.");
+             // Fallback: try parsing the whole thing if no block found
+             try {
+                 const parsedJson = JSON.parse(fullResponse.trim());
+                 // Validate the structure AFTER fallback parsing
+                 if (parsedJson.flashcard?.front && parsedJson.flashcard?.back && parsedJson.cloze?.text) {
+                     console.log("[llmService] Successfully parsed flashcard JSON from raw response (fallback).");
+                     return parsedJson as { flashcard: { front: string; back: string }; cloze: { text: string } };
+                 } else {
+                     console.error("[llmService] Parsed fallback JSON lacks expected structure:", parsedJson);
+                     return null;
+                 }
+             } catch (fallbackError) {
+                 console.error("[llmService] Failed to parse JSON directly from LLM response (fallback failed):", fallbackError);
+                 return null;
+             }
+        }
+        
+        const jsonString = jsonMatch[1] || jsonMatch[2]; // Use captured group
+        const parsedJson = JSON.parse(jsonString.trim());
+
+        // Validate the structure
+        // Use 'flashcard' instead of 'qa'
+        if (parsedJson.flashcard?.front && parsedJson.flashcard?.back && parsedJson.cloze?.text) {
+            console.log("[llmService] Successfully parsed flashcard JSON from LLM response.");
+            // Return the object with the correct type
+            return parsedJson as { flashcard: { front: string; back: string }; cloze: { text: string } };
+        } else {
+            console.error("[llmService] Parsed JSON lacks expected structure (flashcard/cloze):", parsedJson);
+            return null;
+        }
+    } catch (parseError) {
+        console.error("[llmService] Error parsing JSON from LLM response:", parseError);
+        console.error("--- Raw Content Received ---");
+        console.error(fullResponse);
+        console.error("--- End Raw Content ---");
         return null;
     }
 } 

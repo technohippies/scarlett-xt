@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import browser from 'webextension-polyfill';
 import { Gear } from '@phosphor-icons/react'; // Import the Gear icon
 import { sendMessage } from '../../utils/messaging'; // Use the typed messaging from utils
@@ -138,6 +138,31 @@ function App() {
       }
   };
 
+  // Function to trigger LLM generation via background script
+  const handleGenerateFlashcardContent = useCallback(async (text: string) => {
+    console.log("[App] Sending generateFlashcardContent message to background...");
+    try {
+      // Assuming the background script now correctly returns the { flashcard: ..., cloze: ... } structure
+      const response = await sendMessage('generateFlashcardContent', { text });
+      console.log("[App] Received response from background:", response);
+
+      // Validate the response structure EXPECTED BY THE POPUP
+      // Use unknown assertion to bridge any potential type definition mismatch from sendMessage
+      const result = response as unknown as { flashcard?: { front: string; back: string }; cloze?: { text: string } };
+
+      if (result && result.flashcard && result.cloze) {
+        // Return the validated structure { flashcard: ..., cloze: ... }
+        return result as { flashcard: { front: string; back: string }; cloze: { text: string } };
+      } else {
+        console.error("[App] Invalid response structure (expected flashcard/cloze) received from background:", response);
+        return null;
+      }
+    } catch (error) {
+      console.error("[App] Error sending message to background:", error);
+      return null;
+    }
+  }, []);
+
   const handleClosePopup = () => {
     window.close();
   };
@@ -159,6 +184,7 @@ function App() {
           selectedText={selectedText}
           onSaveFlashcard={handleSaveFlashcard}
           onClose={handleClosePopup}
+          onGenerate={handleGenerateFlashcardContent} // Pass the corrected handler
         />
       ) : pageInfo ? (
         <PopupDisplay

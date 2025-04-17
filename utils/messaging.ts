@@ -71,10 +71,17 @@ export interface ProtocolMap {
   // Query SQL (returns rows)
   dbQuery: (data: DbQueryRequest) => Promise<any>; // Keep result type flexible for now
 
+  // == Chat Messages ==
   ollamaChatRequest: (data: OllamaChatRequest) => Promise<{ received: boolean }>;
   ollamaResponse: OllamaStreamChunk;
   getChatHistory: (data: { sessionId?: number | 'current' }) => Promise<ChatMessage[]>;
   addSystemMessage: { content: string };
+
+  // == Flashcard Generation ==
+  generateFlashcardContent: (data: { text: string }) => Promise<{
+    qa: { front: string; back: string };
+    cloze: { text: string };
+  } | null>; 
 }
 
 // Create the typed messaging instance
