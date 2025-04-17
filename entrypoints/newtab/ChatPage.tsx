@@ -17,9 +17,10 @@ const ChatPage: React.FC = () => {
   const [inputValue, setInputValue] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isHistoryLoading, setIsHistoryLoading] = useState<boolean>(true);
-  const [accumulatedResponse, setAccumulatedResponse] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [configLoaded, setConfigLoaded] = useState(false);
+  
+  const accumulatedResponseRef = useRef<string>('');
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -58,16 +59,18 @@ const ChatPage: React.FC = () => {
   useEffect(() => {
       console.log('[ChatPage] Setting up ollamaResponse listener.');
       
+      accumulatedResponseRef.current = '';
+
       const cleanup = onMessage('ollamaResponse', async (message) => {
           const chunk = message.data;
           console.log('[ChatPage] Received ollamaResponse chunk:', chunk);
 
           if (chunk.status === 'chunk') {
-              setAccumulatedResponse(prev => prev + (chunk.content || ''));
+              accumulatedResponseRef.current += (chunk.content || '');
           } else if (chunk.status === 'done' || chunk.status === 'error') {
               setIsLoading(false);
-              const finalContent = accumulatedResponse + (chunk.status === 'error' ? `\n\nError: ${chunk.error}` : '');
-              setAccumulatedResponse('');
+              const finalContent = accumulatedResponseRef.current + (chunk.status === 'error' ? `\n\nError: ${chunk.error}` : '');
+              accumulatedResponseRef.current = '';
               
               if (finalContent.trim()) {
                   try {
@@ -87,19 +90,19 @@ const ChatPage: React.FC = () => {
               }
           } else if (chunk.status === 'override_granted') {
               setIsLoading(false); 
-              setAccumulatedResponse('');
+              accumulatedResponseRef.current = '';
               console.warn('[ChatPage] Override granted, handling not fully implemented.');
           }
       });
 
       return () => {
           console.log('[ChatPage] Cleaning up ollamaResponse listener.');
-          if (accumulatedResponse) {
-              console.warn('[ChatPage] Unmounting with accumulated response - message not saved.');
+          if (accumulatedResponseRef.current) {
+              console.warn('[ChatPage] Unmounting with accumulated response - message not saved. Content:', accumulatedResponseRef.current);
           }
           cleanup();
       };
-  }, [accumulatedResponse]);
+  }, []);
 
   const handleInputChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputValue(event.target.value);

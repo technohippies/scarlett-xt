@@ -4,6 +4,7 @@ import { Gear } from '@phosphor-icons/react'; // Import the Gear icon
 import { sendMessage } from '../../utils/messaging'; // Use the typed messaging from utils
 import PopupDisplay from '../../src/components/PopupDisplay'; // Update import path
 import { createBookmark, createFlashcard, createChatMessage, getChatHistory } from '../../utils/db'; // Import DB functions
+import { generateFlashcardPair } from '../../src/services/llmService'; // Import the new function
 
 // This component manages the state and logic for the popup
 function App() {
@@ -102,17 +103,16 @@ function App() {
         setStatus('Generating flashcards...');
         console.log('Selected Text:', selectedText);
 
-        // TODO: Replace with actual LLM call
-        // const flashcardContent = await llmService.generateFlashcardPair(selectedText, pageInfo.url);
-        // --- Placeholder LLM Response --- 
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate delay
-        const flashcardContent = {
-            frontBack: { front: `What is ${selectedText.substring(0,20)}...?`, back: 'Placeholder back content.' },
-            cloze: { text: `This is a placeholder for the cloze text containing [...${selectedText.substring(0,15)}...].` }
-        };
-        // --- End Placeholder ---
+        // Call the new LLM service function
+        const flashcardContent = await generateFlashcardPair(selectedText, pageInfo.url);
 
-        if (!flashcardContent) throw new Error('Failed to generate flashcard content.');
+        if (!flashcardContent) {
+             // Throw error or set status and return
+             setStatus('Error: Failed to generate flashcard content from LLM.');
+             setStatusIsError(true);
+             // Don't set isSaving=false here yet, it's done in finally block
+             throw new Error('Failed to generate flashcard content.'); 
+        }
 
         // Create Front/Back card
         const frontBackCard = await createFlashcard({

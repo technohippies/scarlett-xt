@@ -1,6 +1,6 @@
 import { sendMessage, type OllamaStreamChunk } from '../../../utils/messaging';
 import type { OllamaConfig, EmbeddingResponse } from '../llmService';
-import type { LLMChatProvider, ProviderStreamChatRequest, LLMEmbeddingProvider, ProviderEmbeddingRequest } from './types';
+import type { LLMChatProvider, ProviderStreamChatRequest, LLMEmbeddingProvider, ProviderEmbeddingRequest, ProviderChatCompletionRequest, ChatCompletionResponse } from './types';
 
 // --- Ollama Chat Implementation --- 
 
@@ -81,6 +81,65 @@ async function streamOllamaChat(request: ProviderStreamChatRequest): Promise<voi
      }
 }
 
+// --- Ollama Chat Completion (Non-Streaming) --- 
+
+async function ollamaChatCompletion(request: ProviderChatCompletionRequest): Promise<ChatCompletionResponse | null> {
+    const { prompt, history = [], config } = request;
+    const ollamaConfig = config as OllamaConfig;
+
+    const model = ollamaConfig.chatModel;
+    const endpoint = ollamaConfig.endpoint.replace(/\/$/, '');
+    const apiUrl = `${endpoint}/api/chat`;
+
+    console.log(`[ollamaProvider] Sending NON-STREAMING chat request to ${apiUrl} with model ${model}`);
+
+    try {
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: model,
+                messages: [...history, { role: 'user', content: prompt }],
+                stream: false // Explicitly set stream to false
+            }),
+        });
+
+        if (!response.ok) {
+            const errorBody = await response.text().catch(() => "Failed to read error body");
+            console.error(`[ollamaProvider] Chat Completion API error (${response.status}): ${errorBody}`);
+            return null; // Return null on API error
+        }
+
+        const result = await response.json();
+
+        // Validate the response structure
+        if (!result.message || typeof result.message.content !== 'string') {
+             console.error("[ollamaProvider] Invalid response format from Ollama Chat API (non-streaming). 'message.content' not found or not a string.", result);
+             return null;
+        }
+
+        console.log("[ollamaProvider] Received non-streaming response:", result);
+        
+        // Map to the standard ChatCompletionResponse format
+        return {
+            message: {
+                role: 'assistant', // Assume role is assistant
+                content: result.message.content,
+            },
+            usage: {
+                 prompt_tokens: result.prompt_eval_count,
+                 completion_tokens: result.eval_count,
+                 // total_tokens: result.?, // Ollama might not provide total directly in non-stream
+            }
+            // Include other fields if needed
+        };
+
+    } catch (error) {
+         console.error("[ollamaProvider] Network or parsing error during chat completion:", error);
+         return null; // Return null on fetch/parse error
+    }
+}
+
 // --- Ollama Embedding Implementation --- 
 
 async function getOllamaEmbeddings(request: ProviderEmbeddingRequest): Promise<EmbeddingResponse> {
@@ -128,6 +187,8 @@ async function getOllamaEmbeddings(request: ProviderEmbeddingRequest): Promise<E
 
 // Export the provider object adhering to the interfaces
 export const ollamaProvider: LLMChatProvider & LLMEmbeddingProvider = {
+    providerId: 'ollama',
     streamChat: streamOllamaChat,
+    chatCompletion: ollamaChatCompletion,
     getEmbeddings: getOllamaEmbeddings,
 }; 

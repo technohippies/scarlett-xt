@@ -78,6 +78,7 @@ async function streamOpenRouterChat(request: ProviderStreamChatRequest): Promise
 
 // Export the provider object adhering to the interface
 export const openRouterProvider: LLMChatProvider = {
+    providerId: 'openrouter',
     streamChat: streamOpenRouterChat,
     // No getEmbeddings for OpenRouter in this example yet
 }; 

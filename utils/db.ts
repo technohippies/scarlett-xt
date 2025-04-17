@@ -186,6 +186,7 @@ export async function createChatMessage(messageData: Omit<ChatMessageDb, 'id' | 
     ];
     const result = await queryDb(sql, params);
     if (!result?.rows?.[0]) throw new Error("Failed to create chat message");
+    console.log('[db.ts createChatMessage] Raw DB result row:', result.rows[0]); 
     return result.rows[0] as ChatMessageDb;
 }
 
@@ -199,7 +200,8 @@ export async function getChatHistory(limit?: number): Promise<ChatHistoryItem[]>
     // Construct the query to fetch messages and join related data
     const sql = `
         SELECT 
-            m.*, 
+            m.id as message_id, -- Alias the message ID
+            m.role, m.content, m.bookmark_id, m.flashcard_id, m.timestamp,
             b.id as bookmark_id_joined, b.url as bookmark_url, b.title as bookmark_title, b.saved_at as bookmark_saved_at, b.tags as bookmark_tags, b.embedding as bookmark_embedding, 
             f.id as flashcard_id_joined, f.* -- Select all flashcard fields
         FROM chat_messages m
@@ -213,31 +215,33 @@ export async function getChatHistory(limit?: number): Promise<ChatHistoryItem[]>
 
     if (!result?.rows) return [];
 
+    console.log('[db.ts getChatHistory] Raw DB result rows:', result.rows);
+
     // Map the raw rows to the ChatHistoryItem union type
     return result.rows.map((row: any): ChatHistoryItem => {
         const message: ChatMessageDb = {
-            id: row.id,
+            id: row.message_id, // Use the explicit alias here
             role: row.role,
             content: row.content,
-            bookmark_id: row.bookmark_id,
-            flashcard_id: row.flashcard_id,
+            bookmark_id: row.bookmark_id, // This comes from m.*, should be correct
+            flashcard_id: row.flashcard_id, // This comes from m.*, should be correct
             timestamp: row.timestamp,
         };
 
         if (row.role === 'bookmark' && row.bookmark_id_joined) {
             const bookmark: Bookmark = {
-                id: row.bookmark_id_joined,
+                id: row.bookmark_id_joined, // Use the specific join alias
                 url: row.bookmark_url,
                 title: row.bookmark_title,
                 saved_at: row.bookmark_saved_at,
                 tags: row.bookmark_tags,
-                embedding: row.bookmark_embedding, // Again, assuming blob handling
+                embedding: row.bookmark_embedding,
             };
             return { type: 'bookmark', message, bookmark };
         } else if (row.role === 'flashcard' && row.flashcard_id_joined) {
-             // Map all flashcard fields from the row (prefix f.)
+             // Map all flashcard fields from the row 
              const flashcard: Flashcard = {
-                 id: row.id_1, // Adjust alias based on pglite output if needed
+                 id: row.flashcard_id_joined, // Use the specific join alias
                  type: row.type,
                  front: row.front,
                  back: row.back,
@@ -247,7 +251,7 @@ export async function getChatHistory(limit?: number): Promise<ChatHistoryItem[]>
                  source_language: row.source_language,
                  target_language: row.target_language,
                  context: row.context,
-                 tags: row.tags_1, // Adjust alias
+                 tags: row.tags_1, // Keep existing alias for tags if needed
                  created_at: row.created_at,
                  due: row.due,
                  stability: row.stability,
@@ -261,7 +265,8 @@ export async function getChatHistory(limit?: number): Promise<ChatHistoryItem[]>
              };
             return { type: 'flashcard', message, flashcard };
         } else {
-            return { type: 'message', data: message };
+            // For regular messages, use the base message object
+            return { type: 'message', data: message }; 
         }
     }).reverse(); // Reverse back to chronological order
 }

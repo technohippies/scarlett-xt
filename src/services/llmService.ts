@@ -2,14 +2,12 @@
 
 import { queryDb } from '../../utils/db'; // To load config
 import { sendMessage, OllamaStreamChunk } from '../../utils/messaging'; // For streaming responses back
-import type { LLMChatProvider, ProviderStreamChatRequest, LLMEmbeddingProvider, ProviderEmbeddingRequest } from './providers/types';
+import type { LLMProvider, LLMChatProvider, ProviderStreamChatRequest, LLMEmbeddingProvider, ProviderEmbeddingRequest } from './providers/types';
 
 // --- Configuration Types ---
 
 // Reuse ChatMessage from messaging.ts if suitable, or redefine if needed
 import type { ChatMessage } from '../../utils/messaging';
-
-export type LLMProvider = 'ollama' | 'openrouter' | 'groq' | 'venice'; // Add venice
 
 // Base configuration structure (you might store this as JSON in the DB)
 export interface LLMConfigBase {
@@ -194,3 +192,109 @@ export async function getEmbeddings(request: EmbeddingRequest): Promise<Embeddin
 }
 
 // Remove old provider implementations 
+
+// --- New Flashcard Generation Function ---
+
+// Define the expected structure of the JSON response from the LLM
+interface FlashcardGenerationResponse {
+  frontBack: {
+    front: string;
+    back: string;
+  };
+  cloze: {
+    text: string;
+  };
+}
+
+// Helper function to create the prompt
+function createFlashcardPrompt(selectedText: string, sourceUrl?: string): string {
+    // Base prompt structure
+    let prompt = `Given the following text selection, generate two types of flashcards: a concise front/back pair and a cloze deletion card. The goal is efficient learning.\n\nText Selection:\n\"${selectedText}\"`;
+
+    if (sourceUrl) {
+        prompt += `\nSource URL (for context): ${sourceUrl}`;
+    }
+
+    prompt += `\n\nInstructions:\n1.  **Front/Back Card:** Create a very concise term/definition pair. Identify the core concept or relationship. Avoid full questions. Prefer short phrases.\n2.  **Cloze Card:** Create a single sentence incorporating the main idea of the text selection. Replace the single most important keyword or phrase with [...]. Do not use markdown for the cloze brackets.\n3.  **Output Format:** Return ONLY a valid JSON object matching this EXACT structure (no extra text, explanations, or markdown formatting):\n    \`\`\`json\n    {\n      \"frontBack\": { \"front\": \"concise front text\", \"back\": \"concise back text\" },\n      \"cloze\": { \"text\": \"Sentence with [...] cloze deletion.\" }\n    }\n    \`\`\`\n\nExamples:\n\nInput Text: \"The Eiffel Tower, located in Paris, France, was completed in 1889.\"\nOutput JSON:\n\`\`\`json\n{\n  \"frontBack\": { \"front\": \"Eiffel Tower Location\", \"back\": \"Paris, France\" },\n  \"cloze\": { \"text\": \"The Eiffel Tower, located in Paris, France, was completed in [...].\" }\n}\n\`\`\`\n\nInput Text: \"Photosynthesis is the process used by plants to convert light energy into chemical energy.\"\nOutput JSON:\n\`\`\`json\n{\n  \"frontBack\": { \"front\": \"Photosynthesis\", \"back\": \"Plant process converting light to chemical energy\" },\n  \"cloze\": { \"text\": \"[...] is the process used by plants to convert light energy into chemical energy.\" }\n}\n\`\`\`\n\nInput Text: \"React is a JavaScript library for building user interfaces.\"\nOutput JSON:\n\`\`\`json\n{\n  \"frontBack\": { \"front\": \"React\", \"back\": \"JS library for UIs\" },\n  \"cloze\": { \"text\": \"React is a JavaScript library for building [...].\" }\n}\n\`\`\`\n\nNow, generate the flashcards for the provided text selection. Output JSON:\n`;
+    return prompt;
+}
+
+/**
+ * Generates a front/back and cloze flashcard pair from selected text using the configured LLM.
+ */
+export async function generateFlashcardPair(selectedText: string, sourceUrl?: string): Promise<FlashcardGenerationResponse | null> {
+    console.log(`[llmService] Generating flashcard pair for text: \"${selectedText.substring(0, 50)}...\"`);
+
+    const config = await loadUserConfig();
+    if (!config) {
+        console.error("[llmService generateFlashcardPair] Cannot generate flashcards: LLM config not loaded.");
+        return null;
+    }
+
+    const prompt = createFlashcardPrompt(selectedText, sourceUrl);
+    let providerModule: LLMChatProvider | null = null;
+
+    // Find the provider module (similar to streamChatResponse)
+    try {
+        switch (config.provider) {
+            case 'ollama': {
+                const { ollamaProvider } = await import('./providers/ollama');
+                providerModule = ollamaProvider;
+                break;
+            }
+            case 'openrouter': {
+                // Assuming OpenRouter provider exists and implements chatCompletion
+                // const { openRouterProvider } = await import('./providers/openrouter');
+                // providerModule = openRouterProvider;
+                console.warn("OpenRouter flashcard generation not yet implemented.");
+                return null;
+            }
+            // Add other providers if they support chatCompletion
+            default: {
+                console.error("[llmService generateFlashcardPair] Unsupported provider for non-streaming chat:", config.provider);
+                return null;
+            }
+        }
+
+        if (!providerModule?.chatCompletion) {
+            console.error(`[llmService generateFlashcardPair] Provider ${config.provider} does not support the required 'chatCompletion' method.`);
+            return null;
+        }
+
+        // Make the non-streaming chat request
+        console.log("[llmService generateFlashcardPair] Sending request to provider chatCompletion...");
+        const response = await providerModule.chatCompletion({
+            prompt: prompt,
+            config: config,
+            history: [], // No history needed for this specific task
+        });
+
+        if (!response?.message?.content) {
+            console.error("[llmService generateFlashcardPair] LLM response was empty or invalid.");
+            return null;
+        }
+
+        // Attempt to parse the JSON from the response content
+        try {
+            // Clean potential markdown code fences
+            const cleanedContent = response.message.content.replace(/```json\\n?|```/g, '').trim();
+            const parsedJson = JSON.parse(cleanedContent);
+            
+            // Basic validation of the parsed structure
+            if (parsedJson.frontBack?.front && parsedJson.frontBack?.back && parsedJson.cloze?.text) {
+                 console.log("[llmService generateFlashcardPair] Successfully parsed flashcard JSON:", parsedJson);
+                 return parsedJson as FlashcardGenerationResponse;
+            } else {
+                 console.error("[llmService generateFlashcardPair] Parsed JSON lacks expected structure:", parsedJson);
+                 return null;
+            }
+        } catch (parseError) {
+            console.error("[llmService generateFlashcardPair] Failed to parse JSON from LLM response:", parseError, "Raw content:", response.message.content);
+            return null;
+        }
+
+    } catch (error) {
+        console.error("[llmService generateFlashcardPair] Error during flashcard generation:", error);
+        return null;
+    }
+} 

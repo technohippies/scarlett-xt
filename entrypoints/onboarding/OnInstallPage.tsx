@@ -6,7 +6,7 @@ import { Input } from '../../src/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../src/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from '../../src/components/ui/toggle-group'; // Import ToggleGroup
 import { useProviderStatus, localProvidersConfig, LocalProviderConfig } from '../../src/hooks/useProviderStatus'; // Import the hook and config
-import type { LLMProvider } from '../../src/services/llmService'; 
+import type { LLMProvider } from '../../src/services/providers/types'; 
 import { cn } from "../../lib/utils"; // Import cn for styling
 // Import desired icons
 import { ShieldPlus, Ghost, Key } from '@phosphor-icons/react';
