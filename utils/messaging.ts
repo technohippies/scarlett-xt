@@ -15,6 +15,8 @@ export interface OllamaChatRequest {
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  id?: string; // Add optional ID used in ChatPage
+  isError?: boolean; // Add optional flag for error messages
 }
 
 // Define ClipData type and export it
@@ -69,7 +71,7 @@ export interface ProtocolMap {
   // Query SQL (returns rows)
   dbQuery: (data: DbQueryRequest) => Promise<any>; // Keep result type flexible for now
 
-  ollamaChatRequest: (data: OllamaChatRequest) => void;
+  ollamaChatRequest: (data: OllamaChatRequest) => Promise<{ received: boolean }>;
   ollamaResponse: OllamaStreamChunk;
   getChatHistory: (data: { sessionId?: number | 'current' }) => Promise<ChatMessage[]>;
   addSystemMessage: { content: string };

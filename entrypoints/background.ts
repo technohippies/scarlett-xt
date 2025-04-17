@@ -1,5 +1,6 @@
 import browser from 'webextension-polyfill';
-import { onMessage, sendMessage, type ProtocolMap } from '~/utils/messaging';
+import { onMessage, sendMessage, type ProtocolMap, OllamaStreamChunk } from '~/utils/messaging';
+import { loadUserConfig, streamChatResponse } from '../src/services/llmService'; // Use relative path for LLM service import
 
 console.log('Background script loaded.');
 
@@ -127,6 +128,32 @@ export default defineBackground(() => {
       return { success: false, error: error.message || 'Unknown error fetching models.' };
     }
   });
+
+  // --- Listener for Chat Requests ---
+  onMessage('ollamaChatRequest', async (message) => {
+    console.log('Background: Received ollamaChatRequest', message.data);
+    const { prompt, history } = message.data;
+
+    // Load config first
+    const config = await loadUserConfig();
+    if (!config) {
+      console.error("Background: Cannot process chat request, user config not found.");
+       sendMessage('ollamaResponse', {
+         status: 'error',
+         error: "LLM configuration not found. Please set it up in the settings."
+       }).catch(e => console.error("Failed to send config error message:", e));
+      throw new Error("LLM configuration not found.");
+    }
+ 
+    // Pass to the llmService to handle provider logic and streaming
+    streamChatResponse({ prompt, history: history || [], config }); 
+    console.log("Background: streamChatResponse initiated (streaming runs in background).");
+    
+    // Return success acknowledgement
+    return { received: true };
+  });
+
+  // --- Listener for Chat History Requests ---
 
   // --- Add other background listeners here (e.g., alarms, other messages) ---
 

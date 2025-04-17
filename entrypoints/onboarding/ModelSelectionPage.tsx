@@ -99,66 +99,62 @@ const ModelSelectionPage: React.FC<ModelSelectionPageProps> = ({
 
       try {
         const config = providerConfig;
-        let fetchedChatModels: Model[] = [];
-        let fetchedEmbeddingModels: Model[] = [];
+        let allFetchedModels: Model[] = [];
 
         if (config.provider === 'openrouter') {
           console.log("Loading OpenRouter models...");
           if (openRouterTier === 'free') {
-             fetchedChatModels = openRouterFreeModels;
+             allFetchedModels = openRouterFreeModels;
           } else {
              console.log("Fetching paid models (not implemented yet)");
-             fetchedChatModels = []; 
+             allFetchedModels = []; 
           }
-          // OpenRouter doesn't need separate embedding model selection
-          fetchedEmbeddingModels = [];
+          // OpenRouter doesn't need separate embedding model selection, handled below
         } else {
           // Local provider - Fetch both chat and embedding models
           console.log(`Requesting models for local provider: ${config.provider}...`);
           
-          // Fetch CHAT models (using placeholder)
-          const chatModelsResponse: { success: boolean; models?: any[]; error?: string } = 
-              { success: true, models: [{id: 'llama3:latest', name: 'llama3:latest'}, {id: 'gemma:7b', name: 'gemma:7b'}, {id: 'mistral:latest', name: 'mistral:latest'}] }; 
-          if (!chatModelsResponse.success || !chatModelsResponse.models) {
-            throw new Error(chatModelsResponse.error || `Failed to load chat models for ${config.provider}.`);
-          }
-          fetchedChatModels = chatModelsResponse.models.map((m: any) => ({ id: m.id || m.name, name: m.name || m.id }));
-          console.log("Local chat models response (placeholder):", fetchedChatModels);
-
-          // Fetch EMBEDDING models dynamically from background script
-          console.log("Fetching local embedding models from background...");
+          // --- Fetch ALL local models from background --- 
+          console.log("Fetching ALL local models from background...");
           // Use the endpoint from the provider config
           const endpointToCall = config.endpoint || 'http://localhost:11434'; // Default if not provided
-          const embeddingModelsResponse = await sendMessage('getOllamaModels', { endpoint: endpointToCall });
-          
-          if (!embeddingModelsResponse?.success || !embeddingModelsResponse?.models) {
-            console.error("Failed to fetch embedding models from background:", embeddingModelsResponse?.error);
-            // Set error state but potentially continue without embedding models?
-            // Or throw the error:
-            throw new Error(embeddingModelsResponse?.error || `Failed to fetch embedding models from ${endpointToCall}.`);
+          const allModelsResponse = await sendMessage('getOllamaModels', { endpoint: endpointToCall });
+
+          if (!allModelsResponse?.success || !allModelsResponse?.models) {
+            console.error("Failed to fetch models from background:", allModelsResponse?.error);
+            throw new Error(allModelsResponse?.error || `Failed to fetch models from ${endpointToCall}.`);
           }
-          fetchedEmbeddingModels = embeddingModelsResponse.models;
-          console.log("Local embedding models response:", fetchedEmbeddingModels);
-          
+          allFetchedModels = allModelsResponse.models;
+          console.log("ALL local models response:", allFetchedModels);
+          // ----------------------------------------------
+        }
+
+        // --- Process fetched models --- 
+
+        // 1. Chat Models (Use the full sorted list, applying preferred patterns)
+        const sortedChatModels = sortModels(allFetchedModels); // Sort all models
+        setChatModels(sortedChatModels);
+        const defaultChatModel =
+          sortedChatModels.find(m => preferredModelPatterns.some(p => p.test(m.id))) || // Find preferred
+          sortedChatModels.find(m => m.id.toLowerCase().includes('gemma')) || // Fallback to any gemma
+          sortedChatModels[0]; // Fallback to first
+        setSelectedChatModel(defaultChatModel?.id || "");
+        console.log("Using chat models:", sortedChatModels);
+        console.log("Default chat model set to:", defaultChatModel?.id);
+
+        // 2. Embedding Models (Filter and sort separately for local providers)
+        let fetchedEmbeddingModels: Model[] = [];
+        if (config.provider !== 'openrouter') {
           // --- Filter for likely embedding models --- 
           const embeddingKeywords = ['embed', 'bge', 'minilm', 'paraphrase', 'instructor']; // Add more if needed
-          const likelyEmbeddingModels = fetchedEmbeddingModels.filter(model => {
+          const likelyEmbeddingModels = allFetchedModels.filter(model => { // Filter from ALL models
             const modelIdLower = model.id.toLowerCase();
             return embeddingKeywords.some(keyword => modelIdLower.includes(keyword));
           });
           console.log("Filtered embedding models:", likelyEmbeddingModels);
           // Use the filtered list from now on
-          fetchedEmbeddingModels = likelyEmbeddingModels;
-          // ----------------------------------------
-        }
-
-        // Sort and set chat models
-        const sortedChatModels = sortModels(fetchedChatModels);
-        setChatModels(sortedChatModels);
-        const defaultChatModel =
-          sortedChatModels.find(m => preferredModelPatterns.some(p => p.test(m.id))) ||
-          sortedChatModels[0];
-        setSelectedChatModel(defaultChatModel?.id || "");
+          fetchedEmbeddingModels = likelyEmbeddingModels; 
+        } 
 
         // Sort and set embedding models (if any)
         if (fetchedEmbeddingModels.length > 0) {
@@ -175,12 +171,14 @@ const ModelSelectionPage: React.FC<ModelSelectionPageProps> = ({
           
           // Default to the first model in the sorted list (which will be bge-m3 if present)
           setSelectedEmbeddingModel(sortedEmbeddingModels[0]?.id || "");
+          console.log("Using embedding models:", sortedEmbeddingModels);
+          console.log("Default embedding model set to:", sortedEmbeddingModels[0]?.id);
         } else {
-          // Handle case where no embedding models were found/returned
+          // Handle case where no embedding models were found/returned for local provider
            setEmbeddingModels([]);
            setSelectedEmbeddingModel("");
            if (config.provider !== 'openrouter') {
-             console.warn("No embedding models found for local provider.");
+             console.warn("No likely embedding models found for local provider after filtering.");
              // Optionally set an error or notification
            }
         }
