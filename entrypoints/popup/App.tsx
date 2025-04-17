@@ -2,13 +2,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import browser from 'webextension-polyfill';
 import { Gear } from '@phosphor-icons/react'; // Import the Gear icon
 import { sendMessage, onMessage } from '../../utils/messaging'; // Use the original and add onMessage
+import type { ProtocolMap, PageInfo, FlashcardGenerationResult } from '../../utils/messaging'; // Import FlashcardGenerationResult
 import PopupDisplay from '../../src/components/PopupDisplay'; // Update import path
 import { FlashcardCreatorPopup } from '../../src/components/popups/FlashcardCreatorPopup'; // Import the new component
 import { createBookmark, createFlashcard, createChatMessage, getChatHistory } from '../../utils/db'; // Removed createFlashcard
 import type { Flashcard } from '../../src/types/db'; // Import Flashcard type
 import { cn } from '../../lib/utils'; // Import the cn function
 import { Button } from '../../src/components/ui/button';
-import type { ProtocolMap, PageInfo } from '../../utils/messaging';
+// Import FSRSCard type definition for Omit
+import { Card as FSRSCard, State } from 'ts-fsrs';
 
 // Define the structure expected from the background script for page info
 // interface PageInfo {
@@ -30,6 +32,9 @@ function App() {
   const [generatedFlashcard, setGeneratedFlashcard] = useState<{ front: string; back: string } | null>(null);
   const [generatedCloze, setGeneratedCloze] = useState<{ text: string } | null>(null);
   const [isGenerating, setIsGenerating] = useState(false); // Loading state for generation
+
+  // Add a ref to track initial generation done
+  const initialGenerationDone = React.useRef<boolean>(false);
 
   useEffect(() => {
     console.log("[App] Initializing popup...");
@@ -78,31 +83,75 @@ function App() {
     fetchInitialData();
   }, []);
 
-  // Effect to listen for flashcard generation results
+  // Generate flashcard content when selected text changes or component mounts
+  // useEffect(() => {
+  //   if (selectedText && !isGenerating && !initialGenerationDone.current) {
+  //     console.log('[App] Triggering initial flashcard generation on mount/text change.');
+  //     handleGenerateFlashcardContent(selectedText);
+  //     initialGenerationDone.current = true;
+  //   }
+  // }, [selectedText, isGenerating]);
+
+  // Handler to initiate flashcard generation
+  // Revert to simple fire-and-forget
+  const handleGenerateFlashcardContent = useCallback((text: string) => {
+    if (isGenerating) {
+      console.warn('[App] Generation already in progress.');
+      return;
+    }
+    console.log('[App] Sending generateFlashcardContent message to background...');
+    setIsGenerating(true);
+    setStatus('Generating flashcard...');
+    setStatusIsError(false);
+    sendMessage('generateFlashcardContent', {
+      text,
+      sourceUrl: pageInfo?.url || null, // Revert back to null for ProtocolMap compatibility
+      sourceLanguage: null, // TODO: Add language detection later
+      targetLanguage: null, // TODO: Add target language later
+    })
+      .catch((error) => {
+        console.error('[App] Error sending generateFlashcardContent message:', error);
+        setStatus(`Error generating: ${error.message}`);
+        setStatusIsError(true);
+      })
+      .finally(() => {
+        // Note: isGenerating is set back to false when the result *arrives* via listener
+        console.log('[App] generateFlashcardContent message sent (fire and forget).');
+      });
+  // Remove isGenerating from dependencies, keep pageInfo if it's stable after load
+  }, [pageInfo]);
+
+  // Listener for flashcard generation results from the background
   useEffect(() => {
-    console.log("[App] Setting up flashcardGenerationResult listener...");
-    const cleanup = onMessage<'flashcardGenerationResult'>(
+    console.log('[App] Setting up flashcardGenerationResult listener...');
+    const unlisten = onMessage(
       'flashcardGenerationResult',
-      (message: any) => {
+      (message) => { // Correctly type the message argument based on ProtocolMap
         console.log('[App] Received flashcardGenerationResult message:', message);
-        setIsGenerating(false); // Turn off loading state
-        if (message.data && message.data.flashcard && message.data.cloze) {
-          setGeneratedFlashcard(message.data.flashcard);
-          setGeneratedCloze(message.data.cloze);
-          setStatus(''); // Clear any previous status
+        const { data, error } = message.data; // Extract data and error from message.data
+        setIsGenerating(false); // Stop generating indicator
+        if (error) {
+          console.error('[App] Flashcard generation failed:', error);
+          setStatus(`Error: ${error}`);
+          setStatusIsError(true);
+          setGeneratedFlashcard(null);
+          setGeneratedCloze(null);
+        } else if (data) {
+          setGeneratedFlashcard(data.flashcard);
+          setGeneratedCloze(data.cloze);
+          setStatus('Generation complete.');
           setStatusIsError(false);
         } else {
-          console.error('[App] Invalid flashcard generation result structure:', message.data);
-          setStatus('Failed to generate flashcard content. Check background logs.');
+          console.warn('[App] Received empty flashcard generation result.');
+          setStatus('Received empty result.');
           setStatusIsError(true);
-          setGeneratedFlashcard(null); // Clear potentially partial data
+          setGeneratedFlashcard(null);
           setGeneratedCloze(null);
         }
-      }
+      },
     );
-    // Cleanup function to remove the listener when the component unmounts
-    return cleanup;
-  }, []); // Empty dependency array means this effect runs once on mount
+    return unlisten;
+  }, []);
 
   const handleTagsChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     setTagsValue(event.target.value);
@@ -135,87 +184,62 @@ function App() {
     }
   };
 
-  // Revert handleSaveFlashcard signature to accept Partial<Flashcard>
-  const handleSaveFlashcard = async (flashcardInput: Partial<Flashcard>) => {
-      const front = flashcardInput.front || '';
-      const back = flashcardInput.back || '';
-      const clozeText = flashcardInput.cloze_text || '';
-      
-      if (isSaving) return;
+  // Handler to save the generated flashcard
+  const handleSaveFlashcard = async (flashcardData: Partial<Flashcard>) => {
+    if (!selectedText) {
+      console.error('[PopupApp] Cannot save flashcard without selected text.');
+      setStatus('Error: No text selected.');
+      setStatusIsError(true);
+      return;
+    }
 
-      if (!front && !clozeText) { 
-          setStatus('Cannot save empty flashcard data.');
-          setStatusIsError(true);
-          return;
+    const completeFlashcardData = {
+      ...(generatedFlashcard ?? {}),
+      ...(generatedCloze ?? {}),
+      ...flashcardData,
+      source_highlight: selectedText,
+      source_url: pageInfo?.url || undefined,
+      // Add other necessary fields with defaults if not provided
+      type: (generatedCloze ? 'cloze' : 'front_back') as Flashcard['type'], // Explicitly cast type
+      tags: flashcardData.tags || undefined,
+      context: flashcardData.context || undefined,
+      difficulty: flashcardData.difficulty || 0,
+      stability: flashcardData.stability || 0,
+      reps: flashcardData.reps || 0,
+      lapses: flashcardData.lapses || 0,
+      state: flashcardData.state || State.New,
+      due: flashcardData.due || new Date().toISOString(),
+      elapsed_days: flashcardData.elapsed_days || 0,
+      scheduled_days: flashcardData.scheduled_days || 0,
+      last_review: flashcardData.last_review || undefined,
+    };
+
+    // Explicitly type the data being sent
+    const cardDataToSend: Partial<Flashcard> = completeFlashcardData;
+
+    console.log('[PopupApp] Sending saveFlashcardAndNotify message to background:', cardDataToSend);
+    setStatus('Saving flashcard...');
+    setStatusIsError(false);
+
+    try {
+      // Send to background for saving and notification
+      const savedFlashcard = await sendMessage('saveFlashcardAndNotify', { cardData: cardDataToSend });
+
+      if (savedFlashcard) {
+        console.log('[PopupApp] Flashcard saved via background:', savedFlashcard);
+        setStatus('Flashcard saved successfully!');
+        setStatusIsError(false);
+        // Optionally close popup or give other feedback
+        // setTimeout(window.close, 1000); // Close after 1 second
+      } else {
+        throw new Error('Background returned null or undefined.');
       }
-
-      setIsSaving(true);
-      setStatus('Saving flashcard...');
-      setStatusIsError(false);
-
-      let cardType: 'front_back' | 'cloze';
-      let cardData: Partial<Omit<Flashcard, 'id' | 'created_at'> > = {};
-
-      if (clozeText) {
-          cardType = 'cloze';
-          cardData = { type: 'cloze', cloze_text: clozeText, front: front || undefined, back: back || undefined };
-      } else if (front || back) {
-          cardType = 'front_back';
-          cardData = { type: 'front_back', front: front || undefined, back: back || undefined };
-      } else { /* Already handled above */ }
-
-      cardData.source_url = pageInfo?.url ?? undefined;
-      cardData.source_highlight = selectedText ?? undefined;
-
-      try {
-         // Comment out the actual save call due to import issues
-         // const newFlashcard = await createFlashcard(cardData as Omit<Flashcard, 'id' | 'created_at' | 'due' | 'stability' | 'difficulty' | 'elapsed_days' | 'scheduled_days' | 'reps' | 'lapses' | 'state' | 'last_review'>);
-         // await createChatMessage({ role: 'flashcard', flashcard_id: newFlashcard.id });
-         console.log('[PopupApp] Flashcard save called (actual DB save commented out):', cardData);
-         setStatus('Flashcard saved! (Simulated)');
-         await new Promise(resolve => setTimeout(resolve, 500)); // Simulate save delay
-         // setTimeout(() => window.close(), 1200); // Keep popup open for now
-      } catch (error) {
-         console.error('[PopupApp] Error preparing flashcard data:', error);
-         setStatus(`Error preparing flashcard: ${error instanceof Error ? error.message : String(error)}`);
-         setStatusIsError(true);
-      } finally {
-         setIsSaving(false);
-      }
+    } catch (error: any) {
+      console.error('[PopupApp] Error saving flashcard via background:', error);
+      setStatus(`Error saving flashcard: ${error.message}`);
+      setStatusIsError(true);
+    }
   };
-
-  // Keep handleGenerateFlashcardContent as async/await to match expected prop type
-  const handleGenerateFlashcardContent = useCallback(async (text: string): Promise<{ flashcard: { front: string; back: string }; cloze: { text: string } } | null> => {
-     console.log("[App] Sending generateFlashcardContent message to background (awaiting response for prop type)...");
-     setStatus('Generating flashcard...');
-     setIsGenerating(true);
-     setStatusIsError(false);
-     setGeneratedFlashcard(null);
-     setGeneratedCloze(null);
-     try {
-         const response = await sendMessage('generateFlashcardContent', { text });
-         console.log("[App] Received direct response (for prop):", response);
-         const result = response as unknown as { flashcard?: { front: string; back: string }; cloze?: { text: string } };
-
-         if (result && result.flashcard && result.cloze) {
-             setIsGenerating(false);
-             setStatus('');
-             return result as { flashcard: { front: string; back: string }; cloze: { text: string } };
-         } else {
-             console.error("[App] Invalid direct response structure:", response);
-             setStatus('Invalid data received from generation.');
-             setStatusIsError(true);
-             setIsGenerating(false);
-             return null;
-         }
-     } catch (error: any) {
-         console.error("[App] Error awaiting generateFlashcardContent message:", error);
-         setStatus(`Error during generation: ${error.message}`);
-         setStatusIsError(true);
-         setIsGenerating(false);
-         return null;
-     }
-  }, []);
 
   const handleClosePopup = () => {
     window.close();

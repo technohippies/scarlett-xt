@@ -11,10 +11,7 @@ interface FlashcardCreatorPopupProps {
   selectedText: string;
   onSaveFlashcard: (flashcardData: Partial<Flashcard>) => void;
   onClose: () => void;
-  onGenerate: (text: string) => Promise<{
-    flashcard: { front: string; back: string };
-    cloze: { text: string };
-  } | null>;
+  onGenerate: (text: string) => void;
   generatedFlashcard: { front: string; back: string } | null;
   generatedCloze: { text: string } | null;
   isGenerating: boolean;
@@ -135,7 +132,7 @@ export const FlashcardCreatorPopup: React.FC<FlashcardCreatorPopupProps> = ({
         try {
             const translated = await sendMessage('translateText', {
                 text: flashcardBack,
-                targetLanguage: 'Mandarin Chinese'
+                targetLang: 'Mandarin Chinese'
             });
 
             if (typeof translated === 'string' && translated) {
@@ -165,7 +162,7 @@ export const FlashcardCreatorPopup: React.FC<FlashcardCreatorPopupProps> = ({
                 const originalAnswer = match[1];
                 const translationResult = await sendMessage('translateText', {
                    text: originalAnswer,
-                   targetLanguage: 'Mandarin Chinese'
+                   targetLang: 'Mandarin Chinese'
                 });
                 if (typeof translationResult === 'string' && translationResult) {
                     translatedAnswer = translationResult;
@@ -214,7 +211,7 @@ export const FlashcardCreatorPopup: React.FC<FlashcardCreatorPopupProps> = ({
   const canSave = !isBusy && (flashcardFront || clozeText);
 
   return (
-    <div className="max-w-xl h-[500px] p-4 bg-background text-foreground border border-border rounded-lg shadow-md flex flex-col gap-3">
+    <div className="max-w-xl h-[530px] p-4 bg-background text-foreground border border-border rounded-lg shadow-md flex flex-col gap-3">
       <div className="flex-grow overflow-y-auto pr-2 flex flex-col gap-3">
         <fieldset className="flex flex-col gap-3">
           <div className="flex justify-between items-center min-h-[36px]">
@@ -295,6 +292,15 @@ export const FlashcardCreatorPopup: React.FC<FlashcardCreatorPopupProps> = ({
             />
           </div>
         </fieldset>
+      </div>
+
+      {/* Status Message Display */}
+      <div className="text-center text-sm min-h-[20px]">
+        {status && (
+          <p className={cn(statusIsError ? "text-destructive" : "text-muted-foreground")}>
+            {status}
+          </p>
+        )}
       </div>
 
        <div className="flex items-center mt-auto shrink-0 pt-2 gap-2">

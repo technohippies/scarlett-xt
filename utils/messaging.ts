@@ -3,6 +3,8 @@ import { defineExtensionMessaging } from '@webext-core/messaging';
 // import type { LLMUserConfig } from '../services/llmService'; 
 // Remove conflicting self-import
 // import type { OllamaStreamChunk } from './messaging'; 
+import type { Flashcard } from '../src/types/db'; // Added Flashcard import
+// import type { DatabaseStats } from '../utils/db'; // REMOVED DatabaseStats import
 
 // Define/Import required types
 // TODO: Ensure these types are correctly defined or imported if they exist elsewhere
@@ -103,11 +105,20 @@ export interface ProtocolMap {
   addSystemMessage: { content: string }; // Simple message
 
   // == Flashcard Generation ==
-  generateFlashcardContent: (data: { text: string }) => void; // Request trigger
-  flashcardGenerationResult: { flashcard: { front: string; back: string }; cloze: { text: string } } | null; // Response
+  generateFlashcardContent: (
+    params: {
+      text: string;
+      sourceUrl: string | null;
+      sourceLanguage: string | null;
+      targetLanguage: string | null;
+    }
+  ) => void; // Fire and forget, result sent via flashcardGenerationResult
+  flashcardGenerationResult: (
+    result: { data: FlashcardGenerationResult; error?: string }
+  ) => void;
 
   // == Translation ==
-  translateText: (data: { text: string; targetLanguage: string }) => Promise<string | null>; // Direct request/response for now
+  translateText: (params: { text: string; targetLang: string }) => Promise<string>;
 
   // == Popup Data Requests ==
   getSelectedText: () => Promise<{ text: string } | null>; // Define expected return type
@@ -121,6 +132,17 @@ export interface ProtocolMap {
   saveConfiguration: { configJson: string };
   loadConfiguration: null;
   queryDb: { query: string; params?: any[] };
+
+  // New messages
+  // getDatabaseStats: () => Promise<DatabaseStats>; // REMOVED this line
+
+  // Message to save flashcard AND notify UI
+  saveFlashcardAndNotify: (
+    params: { cardData: Partial<Flashcard> } // Use Partial for now, refine later if needed
+  ) => Promise<Flashcard | null>; // Returns the saved card or null on error
+
+  // Internal notification message for UI updates
+  _chatHistoryUpdated: () => void;
 }
 
 // Type for the message structure
@@ -138,3 +160,9 @@ export const sendMessage = messagingInstance.sendMessage;
 
 // REMOVE conflicting re-export
 // export type { ProtocolMap }; 
+
+// *** EXPORT THIS TYPE ***
+export type FlashcardGenerationResult = {
+  flashcard: { front: string; back: string };
+  cloze: { text: string };
+} | null; 

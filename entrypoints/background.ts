@@ -1,6 +1,8 @@
 import browser from 'webextension-polyfill';
 import { onMessage, sendMessage, type ProtocolMap, OllamaStreamChunk } from '~/utils/messaging';
 import { loadUserConfig, streamChatResponse, generateFlashcardContentFromText, translateText } from '../src/services/llmService'; // Use relative path for LLM service import
+import { createFlashcard, createChatMessage } from '../utils/db'; // Import DB functions
+import type { Flashcard } from '../src/types/db'; // Import Flashcard type
 
 console.log('Background script loaded.');
 
@@ -198,22 +200,26 @@ export default defineBackground(() => {
     
     if (!text) {
       console.error('[Background] No text provided for flashcard generation.');
-      sendMessage(responseTarget, null).catch(e => console.error("Failed to send null result:", e));
+      // Send back an error object
+      sendMessage(responseTarget, { data: null, error: 'No text provided' })
+        .catch(e => console.error("Failed to send error result:", e));
       return;
     }
 
     try {
         const result = await generateFlashcardContentFromText(text);
         console.log('[Background] Received result from llmService:', result);
-        
-        await new Promise(resolve => setTimeout(resolve, 50)); 
+
+        await new Promise(resolve => setTimeout(resolve, 50));
         console.log('[Background] Attempting to send flashcard result after delay...');
-        
-        sendMessage(responseTarget, result)
+
+        // Send back the result object (result can be the data or null)
+        sendMessage(responseTarget, { data: result, error: undefined })
           .catch(e => console.error("Failed to send flashcard result:", e));
-    } catch (error) {
+    } catch (error: any) {
         console.error('[Background] Error during flashcard generation:', error);
-        sendMessage(responseTarget, null)
+        // Send back an error object
+        sendMessage(responseTarget, { data: null, error: error.message || 'Unknown error during generation' })
           .catch(e => console.error("Failed to send error result:", e));
     }
   });
@@ -277,19 +283,60 @@ export default defineBackground(() => {
   // +++ NEW LISTENER for translateText +++
   onMessage('translateText', async (message) => {
     console.log("[Background] Received translateText request:", message.data);
-    const { text, targetLanguage } = message.data;
-    if (!text || !targetLanguage) {
-      console.error("[Background] Missing text or targetLanguage for translation.");
-      return null;
+    const { text, targetLang } = message.data; // Use targetLang
+    if (!text || !targetLang) {
+      console.error("[Background] Missing text or targetLang for translation.");
+      // Throw error to reject the promise as expected by ProtocolMap
+      throw new Error("Missing text or target language for translation.");
     }
     try {
       // Assuming llmService.translateText handles loading config etc.
-      const translationResult = await translateText(text, targetLanguage);
+      const translationResult = await translateText(text, targetLang);
       console.log("[Background] Translation result from llmService:", translationResult);
-      return translationResult; // Return the string or null
-    } catch (error) {
+      if (translationResult === null) {
+        // Throw error if translation failed as expected by ProtocolMap
+        throw new Error("Translation failed or returned null.");
+      }
+      return translationResult; // Return the string
+    } catch (error: any) {
         console.error("[Background] Error during translation:", error);
-        return null; // Return null on error as per ProtocolMap definition
+        // Re-throw the error to reject the promise
+        throw new Error(`Translation failed: ${error.message || String(error)}`);
+    }
+  });
+
+  // +++ NEW LISTENER for saveFlashcardAndNotify +++
+  onMessage('saveFlashcardAndNotify', async (message) => {
+    console.log("[Background] Received saveFlashcardAndNotify request:", message.data);
+    const { cardData } = message.data;
+
+    if (!cardData) {
+      console.error("[Background] No cardData provided for saveFlashcardAndNotify.");
+      throw new Error("No flashcard data provided."); // Reject the promise
+    }
+
+    try {
+      // 1. Create the flashcard
+      // We need to provide the full Flashcard structure expected by createFlashcard
+      // App.tsx already prepares most of it, but ensure all required fields are present
+      // Note: createFlashcard handles setting initial FSRS state
+      const newFlashcard = await createFlashcard(cardData as Omit<Flashcard, 'id' | 'created_at' | 'due' | 'stability' | 'difficulty' | 'elapsed_days' | 'scheduled_days' | 'reps' | 'lapses' | 'state' | 'last_review'>);
+      console.log("[Background] Flashcard created in DB:", newFlashcard);
+
+      // 2. Create the associated chat message
+      await createChatMessage({ role: 'flashcard', flashcard_id: newFlashcard.id });
+      console.log("[Background] Associated chat message created for flashcard ID:", newFlashcard.id);
+
+      // 3. Send notification to update UI (if needed, e.g., chat history)
+      // sendMessage('_chatHistoryUpdated', undefined).catch(e => console.error("Failed to send _chatHistoryUpdated notification:", e));
+
+      // 4. Return the saved flashcard object as expected by the Promise
+      return newFlashcard;
+
+    } catch (error: any) {
+      console.error("[Background] Error processing saveFlashcardAndNotify:", error);
+      // Throw the error to reject the promise
+      throw new Error(`Failed to save flashcard: ${error.message || String(error)}`);
     }
   });
 
