@@ -17,6 +17,6 @@ declare module '#imports' {
   export { injectScript, ScriptPublicPath, InjectScriptOptions } from 'wxt/utils/inject-script';
   export { InvalidMatchPattern, MatchPattern } from 'wxt/utils/match-patterns';
   export { fakeBrowser } from 'wxt/testing';
-  export { execDb, queryDb, initializeSchema } from '../utils/db';
+  export { execDb, queryDb } from '../utils/db';
   export { sendMessage, onMessage, OllamaStreamChunkStatus, OllamaStreamChunk, OllamaChatRequest, ChatMessage, ClipData, DbExecRequest, DbQueryRequest, ProtocolMap } from '../utils/messaging';
 }

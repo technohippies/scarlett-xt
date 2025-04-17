@@ -2,11 +2,11 @@
 
 // Removed explicit polyfill import, relying on global types + directive
 
-import browser, { type Runtime } from 'webextension-polyfill'; // Needed for getURL, explicitly import Runtime type
-// import { pipeline, PipelineType, Pipeline, ProgressCallback } from '@huggingface/transformers'; // Import pipeline and ProgressCallback
+import browser, { type Runtime } from 'webextension-polyfill'; // Needed for getURL
 // Import the schema content as a raw string
 import dbSchemaSql from '../utils/dbSchema.sql?raw'; // Use relative path
-import { onMessage, type ProtocolMap, type DbExecRequest, type DbQueryRequest } from '../utils/messaging'; // Import typed onMessage and request types
+// Restore @webext-core/messaging imports
+import { onMessage, type ProtocolMap, type DbExecRequest, type DbQueryRequest } from '../utils/messaging'; 
 
 // Log immediately when the script starts executing
 console.log('[Offscreen Script] Top-level execution start.'); 
@@ -18,11 +18,6 @@ export default defineUnlistedScript(() => {
   // Use 'any' for PGlite types with dynamic import
   let db: any = null;
   let dbReadyPromise: Promise<any> | null = null;
-  // let vectorExtension: any = null; // To store the loaded vector extension
-
-  // --- Remove Transformers.js Setup --- 
-  // class EmbeddingPipelineSingleton { ... } // Removed
-  // ---------------------------
 
   async function initDb() {
     // Add logging at the start of initDb
@@ -48,10 +43,13 @@ export default defineUnlistedScript(() => {
         console.log("[Offscreen initDb] PGlite instance created, awaiting ready...");
         await instance.ready;
         console.log('[Offscreen initDb] PGlite instance ready.');
-        // Schema initialization is likely handled by background script calling execDb now
-        // console.log('[Offscreen initDb] Applying database schema...');
-        // await instance.exec(dbSchemaSql);
-        // console.log('[Offscreen initDb] Database schema applied successfully.');
+        
+        // --- Apply Schema Directly After Ready --- 
+        console.log('[Offscreen initDb] Applying database schema...');
+        await instance.exec(dbSchemaSql); // PGlite exec takes no params
+        console.log('[Offscreen initDb] Database schema applied successfully.');
+        // ------------------------------------------
+
         db = instance;
         console.log('[Offscreen initDb] Initialization complete.');
         return db;
@@ -64,26 +62,19 @@ export default defineUnlistedScript(() => {
     return await dbReadyPromise;
   }
 
-  // REMOVE native chrome.runtime.onMessage listener
-  /*
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    // ... old listener code ...
-  });
-  */
-
-  // --- Add Listeners using @webext-core/messaging --- 
-
+  // --- Restore @webext-core/messaging listeners --- 
   console.log('[Offscreen Script] Setting up @webext-core/messaging listeners...');
 
   // Listener for dbExec messages
   onMessage('dbExec', async (message) => {
     console.log('[Offscreen onMessage(dbExec)] Received:', message);
-    const { sql, params } = message.data;
+    // Note: message.data should only contain { sql } as params are not supported by PGlite exec
+    const { sql } = message.data as DbExecRequest; // Type assertion for clarity
     try {
       const dbInstance = await initDb();
-      console.log(`[Offscreen onMessage(dbExec)] Executing SQL: ${sql} with params:`, params);
-      // PGlite exec might return { rowsModified: number }, pass it back
-      const result = await dbInstance.exec(sql, params || []); 
+      console.log(`[Offscreen onMessage(dbExec)] Executing SQL: ${sql}`);
+      // PGlite exec might return { rowsModified: number } or void
+      const result = await dbInstance.exec(sql); // Pass only SQL
       console.log('[Offscreen onMessage(dbExec)] Execution successful, result:', result);
       return result; // Return the result (or void)
     } catch (error: any) {
@@ -97,11 +88,11 @@ export default defineUnlistedScript(() => {
   // Listener for dbQuery messages
   onMessage('dbQuery', async (message) => {
     console.log('[Offscreen onMessage(dbQuery)] Received:', message);
-    const { sql, params } = message.data;
+    const { sql, params } = message.data as DbQueryRequest; // Type assertion
     try {
       const dbInstance = await initDb();
       console.log(`[Offscreen onMessage(dbQuery)] Executing SQL: ${sql} with params:`, params);
-      const result = await dbInstance.query(sql, params || []);
+      const result = await dbInstance.query(sql, params || []); // Pass SQL and params
       console.log('[Offscreen onMessage(dbQuery)] Execution successful, result:', result);
       return result; // Return the result (rows, etc.)
     } catch (error: any) {
@@ -112,7 +103,8 @@ export default defineUnlistedScript(() => {
   });
   console.log('[Offscreen Script] dbQuery listener attached.');
 
-  // Optional: Kick off DB init proactively
+
+  // Optional: Kick off DB init proactively, or let the first message trigger it.
   initDb().catch(e => console.error("[Offscreen Script] Proactive initDb failed:", e)); 
 
   console.log('[Offscreen Script] Setup complete.');

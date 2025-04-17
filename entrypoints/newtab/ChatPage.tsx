@@ -26,9 +26,9 @@ const ChatPage: React.FC = () => {
         const result = await queryDb(sql); 
         console.log('[ChatPage] Raw DB Result for config:', result);
         
-        // Parse the result (assuming PGlite returns an array of objects)
-        if (result && Array.isArray(result) && result.length > 0 && result[0].config_json) {
-          const config = JSON.parse(result[0].config_json);
+        // Correctly parse the PGlite result object
+        if (result && result.rows && Array.isArray(result.rows) && result.rows.length > 0 && result.rows[0].config_json) {
+          const config = JSON.parse(result.rows[0].config_json);
           console.log('[ChatPage] Loaded User Configuration from DB:', config);
           // You can store this config in state if needed 
           // setLoadedConfig(config); 

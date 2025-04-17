@@ -15,7 +15,6 @@ declare global {
   const defineWxtPlugin: typeof import('wxt/utils/define-wxt-plugin')['defineWxtPlugin']
   const execDb: typeof import('/media/xo42/th427/Code/scarlett-wxt-storybook/utils/db')['execDb']
   const fakeBrowser: typeof import('wxt/testing')['fakeBrowser']
-  const initializeSchema: typeof import('/media/xo42/th427/Code/scarlett-wxt-storybook/utils/db')['initializeSchema']
   const injectScript: typeof import('wxt/utils/inject-script')['injectScript']
   const onMessage: typeof import('/media/xo42/th427/Code/scarlett-wxt-storybook/utils/messaging')['onMessage']
   const queryDb: typeof import('/media/xo42/th427/Code/scarlett-wxt-storybook/utils/db')['queryDb']

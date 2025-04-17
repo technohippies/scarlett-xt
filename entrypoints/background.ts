@@ -1,6 +1,5 @@
 import browser from 'webextension-polyfill';
 import { onMessage, sendMessage, type ProtocolMap } from '~/utils/messaging';
-import { initializeSchema } from '~/utils/db'; // Import schema initializer
 
 console.log('Background script loaded.');
 
@@ -138,15 +137,10 @@ export default defineBackground(() => {
     // Check if the reason for the event is the initial installation
     if (details.reason === 'install') {
       console.log('Performing first-time setup...');
-      // Initialize offscreen document AND database schema on first install
-      try {
-        await setupOffscreenDocument(); // Ensure offscreen is ready first
-        console.log('[Background] Offscreen document ready, initializing schema...');
-        await initializeSchema(); 
-        console.log('[Background] Database schema initialized successfully.');
-      } catch (error) {
-        console.error('[Background] Failed during initial setup (offscreen or schema):', error);
-      }
+      // Only need to ensure offscreen document exists. Schema is initialized within offscreen.ts.
+      await setupOffscreenDocument().catch(error => {
+        console.error('[Background] Initial setupOffscreenDocument failed on install:', error);
+      });
 
       // Construct the URL for the onboarding page
       const url = browser.runtime.getURL('onboarding.html');

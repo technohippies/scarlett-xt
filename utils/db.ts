@@ -3,10 +3,7 @@
 
 import { Mutex } from 'async-mutex';
 import browser from 'webextension-polyfill';
-import { sendMessage } from './messaging'; // Import typed sendMessage
-
-// Import the schema content as a raw string
-import dbSchemaSql from './dbSchema.sql?raw'; // Ensure correct path
+import { sendMessage } from './messaging'; 
 
 const OFFSCREEN_DOCUMENT_PATH = 'offscreen.html';
 let creatingPromise: Promise<void> | null = null;
@@ -25,7 +22,7 @@ async function ensureOffscreenDocument() {
       });
 
     if (existingContexts.length > 0) {
-      console.log('[DB Util] Offscreen document already exists.');
+      // console.log('[DB Util] Offscreen document already exists.'); // Less verbose
       return; // Already exists, we're good.
     }
 
@@ -39,7 +36,6 @@ async function ensureOffscreenDocument() {
     console.log('[DB Util] Creating offscreen document...');
     creatingPromise = chrome.offscreen.createDocument({ // Use native chrome API
       url: OFFSCREEN_DOCUMENT_PATH,
-      // Use a valid reason - DOM_PARSER is often sufficient if you don't need audio/etc.
       reasons: ['DOM_PARSER' as chrome.offscreen.Reason], 
       justification: 'Provides PGlite database operations.',
     });
@@ -70,31 +66,19 @@ async function ensureOffscreenDocument() {
   }
 }
 
-// Export functions that mirror PGlite methods via messaging
-export async function execDb(sql: string, params?: any[]): Promise<any> {
+// Export functions that mirror PGlite methods via @webext-core/messaging
+export async function execDb(sql: string): Promise<any> {
   await ensureOffscreenDocument();
-  console.log('[DB Util] Sending dbExec message:', { sql, params });
-  // Use the typed sendMessage with the specific protocol message
-  return sendMessage('dbExec', { sql, params }); 
+  // console.log('[DB Util] Sending dbExec message:', { sql }); // Less verbose
+  // PGlite exec doesn't support params, so we only send sql
+  return sendMessage('dbExec', { sql }); 
 }
 
 export async function queryDb(sql: string, params?: any[]): Promise<any> {
   await ensureOffscreenDocument();
-  console.log('[DB Util] Sending dbQuery message:', { sql, params });
-  // Use the typed sendMessage with the specific protocol message
-  return sendMessage('dbQuery', { sql, params }); 
+  // console.log('[DB Util] Sending dbQuery message:', { sql, params }); // Less verbose
+  return sendMessage('dbQuery', { sql, params: params || [] }); 
 }
 
-// --- Schema Initialization --- 
-export async function initializeSchema() {
-  console.log('[DB Util] Executing full schema initialization via offscreen...');
-  try {
-    // Use the refactored execDb function
-    await execDb(dbSchemaSql); // No params needed for schema
-    console.log('[DB Util] Schema initialization command sent successfully.');
-  } catch (error) {
-    console.error('[DB Util] Failed to send schema initialization command:', error);
-    // Potentially retry or handle specific errors (e.g., DB already initialized)
-    throw error; // Re-throw to indicate failure
-  }
-} 
+// Schema is initialized directly in offscreen.ts
+// export async function initializeSchema() { ... } 
