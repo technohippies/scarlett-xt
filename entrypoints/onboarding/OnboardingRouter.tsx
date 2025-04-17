@@ -39,7 +39,7 @@ function OnboardingRouter() {
 
       // --- Manual UPSERT logic --- 
       console.log('[OnboardingRouter] Checking for existing configuration...');
-      const selectSql = `SELECT id FROM user_configuration WHERE id = ?;`;
+      const selectSql = `SELECT id FROM user_configuration WHERE id = $1;`;
       const existingConfig = await queryDb(selectSql, [1]); // Use queryDb
 
       if (existingConfig && existingConfig.length > 0) {
@@ -47,19 +47,19 @@ function OnboardingRouter() {
         console.log('[OnboardingRouter] Existing configuration found. Updating...');
         const updateSql = `
           UPDATE user_configuration 
-          SET config_json = ?, updated_at = CURRENT_TIMESTAMP 
-          WHERE id = ?;
-        `;
-        await execDb(updateSql, [configJson, 1]);
+          SET config_json = $1, updated_at = CURRENT_TIMESTAMP 
+          WHERE id = $2;
+        `; // Use $1, $2 placeholders
+        await queryDb(updateSql, [configJson, 1]); // Use queryDb for parameterized UPDATE
         console.log('[OnboardingRouter] Update successful.');
       } else {
         // --- INSERT new config --- 
         console.log('[OnboardingRouter] No existing configuration found. Inserting...');
         const insertSql = `
           INSERT INTO user_configuration (id, config_json, updated_at)
-          VALUES (?, ?, CURRENT_TIMESTAMP);
-        `;
-        await execDb(insertSql, [1, configJson]);
+          VALUES ($1, $2, CURRENT_TIMESTAMP);
+        `; // Use $1, $2 placeholders
+        await queryDb(insertSql, [1, configJson]); // Use queryDb for parameterized INSERT
         console.log('[OnboardingRouter] Insert successful.');
       }
       // --------------------------

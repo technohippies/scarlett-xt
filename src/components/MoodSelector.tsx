@@ -70,22 +70,22 @@ export const MoodSelector: React.FC<MoodSelectorProps> = ({
   };
 
   if (isLoading) {
-    return <div className="flex items-center justify-center p-2 bg-gray-100 rounded-md h-[56px]">Loading moods...</div>; // Match height
+    return <div className="flex items-center justify-center p-3 bg-gray-100 rounded-md h-[96px]">Loading moods...</div>;
   }
 
   if (error) {
-     return <div className="flex items-center justify-center p-2 bg-red-100 text-red-700 rounded-md h-[56px]">Error: {error}</div>;
+     return <div className="flex items-center justify-center p-3 bg-red-100 text-red-700 rounded-md h-[96px]">Error: {error}</div>;
   }
 
   return (
-    <div className="flex items-center space-x-2 p-2 bg-gray-100 rounded-md"> {/* Container */}
+    <div className="flex items-center space-x-4 p-4 bg-gray-100 rounded-md"> {/* Container: Increased padding p-3 -> p-4 */}
       {moodOptions.map(({ mood, label }) => {
         const isSelected = selectedMood === mood;
         const animationData = lottieData[mood];
 
         if (!animationData) {
-          // Should not happen if loading succeeded, but good safeguard
-          return <div key={mood} className="w-[40px] h-[40px] bg-gray-300 rounded-full animate-pulse"></div>;
+          // Adjust size for placeholder
+          return <div key={mood} className="w-[80px] h-[80px] bg-gray-300 rounded-full animate-pulse"></div>;
         }
 
         return (
@@ -97,17 +97,17 @@ export const MoodSelector: React.FC<MoodSelectorProps> = ({
             aria-label={`Select ${label} Mood`}
             aria-pressed={isSelected}
             className={`
-              p-1 rounded-full transition-transform duration-150 ease-in-out flex items-center justify-center
+              p-2 rounded-full transition-transform duration-150 ease-in-out flex items-center justify-center
               hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
-              ${isSelected ? 'ring-2 ring-blue-600 ring-offset-1 bg-blue-100' : 'bg-white'}
+              ${isSelected ? 'ring-2 ring-blue-600 ring-offset-1 bg-blue-100' : 'bg-gray-50'}
               ${(disabled || isLoading) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
             `}
-            style={{ width: '40px', height: '40px' }}
+            style={{ width: '80px', height: '80px' }}
           >
             <Lottie
               animationData={animationData}
-              loop={true} // Loop animation for visual feedback, can be changed
-              autoplay={true} // Autoplay might be nice for initial view
+              loop={isSelected}
+              autoplay={true}
               style={{ width: '100%', height: '100%' }}
             />
           </button>
