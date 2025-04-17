@@ -3,8 +3,9 @@ import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
 import { ArrowClockwise, Check, Cards, BracketsCurly, Translate } from '@phosphor-icons/react';
-import { Flashcard } from '../../types/db';
+import type { Flashcard } from '../../types/db';
 import { cn } from '../../../lib/utils';
+import { sendMessage } from '../../../utils/messaging';
 
 interface FlashcardCreatorPopupProps {
   selectedText: string;
@@ -14,6 +15,11 @@ interface FlashcardCreatorPopupProps {
     flashcard: { front: string; back: string };
     cloze: { text: string };
   } | null>;
+  generatedFlashcard: { front: string; back: string } | null;
+  generatedCloze: { text: string } | null;
+  isGenerating: boolean;
+  status: string;
+  statusIsError: boolean;
 }
 
 export const FlashcardCreatorPopup: React.FC<FlashcardCreatorPopupProps> = ({
@@ -21,12 +27,16 @@ export const FlashcardCreatorPopup: React.FC<FlashcardCreatorPopupProps> = ({
   onSaveFlashcard,
   onClose,
   onGenerate,
+  generatedFlashcard,
+  generatedCloze,
+  isGenerating: isParentGenerating,
+  status,
+  statusIsError,
 }) => {
   const [flashcardFront, setFlashcardFront] = useState('');
   const [flashcardBack, setFlashcardBack] = useState('');
   const [clozeText, setClozeText] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isGenerated, setIsGenerated] = useState(false);
+  const [isLoadingInitial, setIsLoadingInitial] = useState(true);
   const [loadingDots, setLoadingDots] = useState('.');
   const [translatedFlashcardBack, setTranslatedFlashcardBack] = useState<string | null>(null);
   const [translatedClozeText, setTranslatedClozeText] = useState<string | null>(null);
@@ -34,53 +44,32 @@ export const FlashcardCreatorPopup: React.FC<FlashcardCreatorPopupProps> = ({
   const [isTranslatingCloze, setIsTranslatingCloze] = useState(false);
   const [flashcardRegenTrigger, setFlashcardRegenTrigger] = useState(0);
   const [clozeRegenTrigger, setClozeRegenTrigger] = useState(0);
-  const [isGeneratingFlashcard, setIsGeneratingFlashcard] = useState(true);
-  const [isGeneratingCloze, setIsGeneratingCloze] = useState(true);
+  const [isRegeneratingFlashcard, setIsRegeneratingFlashcard] = useState(false);
+  const [isRegeneratingCloze, setIsRegeneratingCloze] = useState(false);
 
   useEffect(() => {
     let dotInterval: NodeJS.Timeout | null = null;
-    const initialTrigger = flashcardRegenTrigger === 0 && clozeRegenTrigger === 0;
 
-    if (!initialTrigger) return;
+    if (!selectedText) {
+        setIsLoadingInitial(false);
+        return;
+    }
 
     const generateInitialCards = async () => {
         setFlashcardFront(''); setFlashcardBack(''); setClozeText('');
         setTranslatedFlashcardBack(null); setTranslatedClozeText(null);
-        setIsGenerated(false);
-        setIsGeneratingFlashcard(true);
-        setIsGeneratingCloze(true);
-
-        if (!selectedText) {
-            setIsLoading(false);
-            setIsGeneratingFlashcard(false);
-            setIsGeneratingCloze(false);
-            return;
-        }
-
-        setIsLoading(true);
+        setIsLoadingInitial(true);
         setLoadingDots('.');
         dotInterval = setInterval(() => { setLoadingDots(prev => prev === '...' ? '.' : prev + '.'); }, 400);
 
-        console.log(`[Popup] Requesting INITIAL LLM generation for:`, selectedText);
-        
+        console.log(`[Popup] Requesting INITIAL generation via onGenerate for:`, selectedText);
         try {
-            const result = await onGenerate(selectedText);
-            console.log("[Popup] Received INITIAL generation result:", result);
-            if (result) {
-                setFlashcardFront(result.flashcard?.front || '');
-                setFlashcardBack(result.flashcard?.back || '');
-                setClozeText(result.cloze?.text || '');
-            } else {
-                console.error("[Popup] Initial LLM Generation failed or returned null.");
-            }
+            await onGenerate(selectedText);
+            console.log("[Popup] Initial generation request sent.");
         } catch (error) {
-            console.error("[Popup] Error during initial LLM generation call:", error);
+            console.error("[Popup] Error triggering initial generation via onGenerate:", error);
         } finally {
-             console.log(`[Popup] Initial LLM generation process complete.`);
-             setIsLoading(false);
-             setIsGenerated(true);
-             setIsGeneratingFlashcard(false);
-             setIsGeneratingCloze(false);
+             setIsLoadingInitial(false);
              if (dotInterval) clearInterval(dotInterval);
         }
     };
@@ -91,58 +80,52 @@ export const FlashcardCreatorPopup: React.FC<FlashcardCreatorPopupProps> = ({
   }, [selectedText, onGenerate]);
 
   useEffect(() => {
-    if (flashcardRegenTrigger === 0) return;
-
-    const regenerateFlashcard = async () => {
-        setIsGeneratingFlashcard(true);
+    console.log("[Popup] generatedFlashcard prop changed:", generatedFlashcard);
+    if (generatedFlashcard) {
+        setFlashcardFront(generatedFlashcard.front);
+        setFlashcardBack(generatedFlashcard.back);
         setTranslatedFlashcardBack(null);
-        console.log(`[Popup] Regenerating Flashcard (Trigger: ${flashcardRegenTrigger})`);
+    }
+  }, [generatedFlashcard]);
+
+  useEffect(() => {
+     console.log("[Popup] generatedCloze prop changed:", generatedCloze);
+    if (generatedCloze) {
+        setClozeText(generatedCloze.text);
+        setTranslatedClozeText(null);
+    }
+  }, [generatedCloze]);
+
+  useEffect(() => {
+    if (flashcardRegenTrigger === 0) return;
+    const regenerateFlashcard = async () => {
+        setIsRegeneratingFlashcard(true);
+        setTranslatedFlashcardBack(null);
+        console.log(`[Popup] Triggering regeneration (Flashcard) via onGenerate`);
         try {
-            const result = await onGenerate(selectedText);
-            if (result?.flashcard) {
-                setFlashcardFront(result.flashcard.front || '');
-                setFlashcardBack(result.flashcard.back || '');
-            } else {
-                 console.warn("[Popup] Flashcard regeneration failed or missing in result.");
-                 setFlashcardFront('Failed'); setFlashcardBack('Failed');
-            }
-        } catch (error) {
-             console.error("[Popup] Error regenerating Flashcard:", error);
-             setFlashcardFront('Error'); setFlashcardBack('Error');
-        } finally {
-            setIsGeneratingFlashcard(false);
-        }
+            await onGenerate(selectedText);
+        } catch (error) { console.error("[Popup] Error triggering flashcard regen:", error); }
+          finally { setIsRegeneratingFlashcard(false); }
     };
     regenerateFlashcard();
   }, [flashcardRegenTrigger, selectedText, onGenerate]);
 
   useEffect(() => {
     if (clozeRegenTrigger === 0) return;
-
     const regenerateCloze = async () => {
-        setIsGeneratingCloze(true);
+        setIsRegeneratingCloze(true);
         setTranslatedClozeText(null);
-        console.log(`[Popup] Regenerating Cloze (Trigger: ${clozeRegenTrigger}`);
+        console.log(`[Popup] Triggering regeneration (Cloze) via onGenerate`);
         try {
-            const result = await onGenerate(selectedText);
-            if (result?.cloze) {
-                setClozeText(result.cloze.text || '');
-            } else {
-                console.warn("[Popup] Cloze regeneration failed or missing in result.");
-                setClozeText('Failed to regenerate cloze.');
-            }
-        } catch (error) {
-             console.error("[Popup] Error regenerating Cloze:", error);
-             setClozeText('Error regenerating cloze.');
-        } finally {
-            setIsGeneratingCloze(false);
-        }
+            await onGenerate(selectedText);
+        } catch (error) { console.error("[Popup] Error triggering cloze regen:", error); }
+         finally { setIsRegeneratingCloze(false); }
     };
     regenerateCloze();
   }, [clozeRegenTrigger, selectedText, onGenerate]);
 
   const handleTranslate = useCallback(async (type: 'flashcard' | 'cloze') => {
-    if (!isGenerated || isLoading || isGeneratingFlashcard || isGeneratingCloze) return;
+    if (isParentGenerating || isRegeneratingFlashcard || isRegeneratingCloze) return;
 
     if (type === 'flashcard') {
         if (!flashcardBack || isTranslatingFlashcard) return;
@@ -171,65 +154,71 @@ export const FlashcardCreatorPopup: React.FC<FlashcardCreatorPopupProps> = ({
         if (!clozeText || isTranslatingCloze) return;
         setIsTranslatingCloze(true);
         setTranslatedClozeText('Translating...');
-        console.log('[Popup] Translating Cloze Answer (Simulation - Full text translation not implemented yet):', clozeText);
-
-        await new Promise(resolve => setTimeout(resolve, 800));
-        const match = clozeText.match(/\{\{c1::(.*?)\}\}/);
+        console.log('[Popup] Translating Cloze Answer:', clozeText);
+        
         let finalCloze = clozeText;
-        if (match && match[1]) {
-            const originalAnswer = match[1];
-            if (!originalAnswer.startsWith('[Translated]')) {
-                const translatedAnswer = `[Simulated Translation] ${originalAnswer}`;
-                finalCloze = clozeText.replace(`{{c1::${originalAnswer}}}`, `{{c1::${translatedAnswer}}}`);
+
+        try {
+            const match = clozeText.match(/\{\{c1::(.*?)\}\}/);
+            let translatedAnswer = '[Translation Error]';
+            if (match && match[1]) {
+                const originalAnswer = match[1];
+                const translationResult = await sendMessage('translateText', {
+                   text: originalAnswer,
+                   targetLanguage: 'Mandarin Chinese'
+                });
+                if (typeof translationResult === 'string' && translationResult) {
+                    translatedAnswer = translationResult;
+                }
+                 finalCloze = clozeText.replace(`{{c1::${originalAnswer}}}`, `{{c1::${translatedAnswer}}}`);
+            } else {
+                console.warn("Could not extract cloze answer for translation.");
+                finalCloze = '[No Answer Found for Translation]';
             }
-        } else {
-            console.warn("Could not extract cloze answer for translation simulation.");
-            finalCloze = '[Translation Error]';
+             setTranslatedClozeText(finalCloze);
+        } catch (error) {
+             console.error('[Popup] Error translating cloze answer:', error);
+             setTranslatedClozeText('[Translation Error]');
+        } finally {
+            setIsTranslatingCloze(false);
         }
-        setTranslatedClozeText(finalCloze);
-        setIsTranslatingCloze(false);
     }
-  }, [isGenerated, isLoading, isGeneratingFlashcard, isGeneratingCloze, flashcardBack, clozeText, isTranslatingFlashcard, isTranslatingCloze]);
+  }, [isParentGenerating, isRegeneratingFlashcard, isRegeneratingCloze, flashcardBack, clozeText, isTranslatingFlashcard, isTranslatingCloze]);
 
   const handleSave = () => {
     const backContentToSave = translatedFlashcardBack ?? flashcardBack;
-    if (!isGenerated || !flashcardFront || !backContentToSave) {
-        console.warn('[Popup] Cannot save, content not valid or not generated.');
+    if (!flashcardFront && !clozeText) {
+        console.warn('[Popup] Cannot save, missing front/cloze content.');
         return;
     }
+
     let flashcardData: Partial<Flashcard> = {
       source_highlight: selectedText,
-      type: 'qa',
-      front: flashcardFront,
-      back: backContentToSave,
+      type: clozeText ? 'cloze' : 'front_back',
+      front: flashcardFront || undefined,
+      back: backContentToSave || undefined,
+      cloze_text: clozeText || undefined,
+      target_language: translatedFlashcardBack || translatedClozeText ? 'zh-CN' : undefined,
+      source_url: undefined,
+      context: undefined,
+      tags: undefined
     };
-    if (translatedFlashcardBack) {
-        flashcardData.target_language = 'xx';
-    }
+
     onSaveFlashcard(flashcardData);
-    onClose();
   };
 
-  const handleRegenerateFlashcard = () => {
-      if (isLoading || isGeneratingFlashcard || isGeneratingCloze || isTranslatingFlashcard || isTranslatingCloze) return;
-      setFlashcardRegenTrigger(prev => prev + 1);
-  };
-
-  const handleRegenerateCloze = () => {
-      if (isLoading || isGeneratingFlashcard || isGeneratingCloze || isTranslatingFlashcard || isTranslatingCloze) return;
-      setClozeRegenTrigger(prev => prev + 1);
-  };
-
-  const canSave = isGenerated && flashcardFront && (translatedFlashcardBack || flashcardBack);
   const loadingPlaceholder = `Generating${loadingDots}`;
-  const isBusy = isLoading || isGeneratingFlashcard || isGeneratingCloze || isTranslatingFlashcard || isTranslatingCloze;
-  const isFlashcardBusy = isLoading || isGeneratingFlashcard || isTranslatingFlashcard;
-  const isClozeBusy = isLoading || isGeneratingCloze || isTranslatingCloze;
+  const isBusy = isLoadingInitial || isParentGenerating || isRegeneratingFlashcard || isRegeneratingCloze || isTranslatingFlashcard || isTranslatingCloze;
+  const isFlashcardBusy = isLoadingInitial || isParentGenerating || isRegeneratingFlashcard || isTranslatingFlashcard;
+  const isClozeBusy = isLoadingInitial || isParentGenerating || isRegeneratingCloze || isTranslatingCloze;
+  const canSave = !isBusy && (flashcardFront || clozeText);
 
   return (
     <div className="max-w-xl h-[500px] p-4 bg-background text-foreground border border-border rounded-lg shadow-md flex flex-col gap-3">
+      {status && (
+        <p className={cn("text-sm text-center mb-2", statusIsError ? "text-destructive" : "text-muted-foreground")}>{status}</p>
+      )}
       <div className="flex-grow overflow-y-auto pr-2 flex flex-col gap-3">
-        {/* Flashcard Section (formerly Q&A) */}
         <fieldset className="flex flex-col gap-3">
           <div className="flex justify-between items-center min-h-[36px]">
             <legend className="text-lg font-semibold px-1 flex items-center gap-2">
@@ -243,7 +232,7 @@ export const FlashcardCreatorPopup: React.FC<FlashcardCreatorPopupProps> = ({
                     className="text-muted-foreground hover:text-foreground h-7 w-7"
                     onClick={() => handleTranslate('flashcard')}
                     disabled={isFlashcardBusy || !flashcardBack}
-                    title="Translate Back"
+                    title="Translate Back (to Chinese)"
                 >
                     {isTranslatingFlashcard ? <ArrowClockwise size={14} className="animate-spin" /> : <Translate size={14} />}
                 </Button>
@@ -251,21 +240,21 @@ export const FlashcardCreatorPopup: React.FC<FlashcardCreatorPopupProps> = ({
                     variant="ghost"
                     size="icon"
                     className="text-muted-foreground hover:text-foreground h-7 w-7"
-                    onClick={handleRegenerateFlashcard}
+                    onClick={() => setFlashcardRegenTrigger(p => p + 1)}
                     disabled={isBusy || !selectedText}
                     title="Regenerate Flashcard"
                 >
-                    <ArrowClockwise size={14} className={isGeneratingFlashcard ? "animate-spin" : ""} />
+                    <ArrowClockwise size={14} className={isRegeneratingFlashcard ? "animate-spin" : ""} />
                 </Button>
             </div>
           </div>
           <div>
             <Label htmlFor="flashcard-front">Front</Label>
-            <Textarea id="flashcard-front" className="mt-1" value={flashcardFront} onChange={(e) => setFlashcardFront(e.target.value)} placeholder={isGeneratingFlashcard ? loadingPlaceholder : "Topic/Concept..."} rows={1} disabled={isGeneratingFlashcard} />
+            <Textarea id="flashcard-front" className="mt-1" value={flashcardFront} onChange={(e) => setFlashcardFront(e.target.value)} placeholder={isFlashcardBusy ? loadingPlaceholder : "Topic/Concept..."} rows={1} disabled={isFlashcardBusy} />
           </div>
            <div>
             <Label htmlFor="flashcard-back">Back</Label>
-            <Textarea id="flashcard-back" className="mt-1" value={translatedFlashcardBack ?? flashcardBack} onChange={(e) => setFlashcardBack(e.target.value)} placeholder={isGeneratingFlashcard ? loadingPlaceholder : "Fact/Definition..."} rows={1} disabled={isGeneratingFlashcard || isTranslatingFlashcard} />
+            <Textarea id="flashcard-back" className="mt-1" value={translatedFlashcardBack ?? flashcardBack} onChange={(e) => setFlashcardBack(e.target.value)} placeholder={isFlashcardBusy ? loadingPlaceholder : "Fact/Definition..."} rows={1} disabled={isFlashcardBusy} />
           </div>
         </fieldset>
 
@@ -282,7 +271,7 @@ export const FlashcardCreatorPopup: React.FC<FlashcardCreatorPopupProps> = ({
                     className="text-muted-foreground hover:text-foreground h-7 w-7"
                     onClick={() => handleTranslate('cloze')}
                     disabled={isClozeBusy || !clozeText}
-                    title="Translate Cloze Answer"
+                    title="Translate Cloze Answer (to Chinese)"
                 >
                     {isTranslatingCloze ? <ArrowClockwise size={14} className="animate-spin" /> : <Translate size={14} />}
                 </Button>
@@ -290,11 +279,11 @@ export const FlashcardCreatorPopup: React.FC<FlashcardCreatorPopupProps> = ({
                     variant="ghost"
                     size="icon"
                     className="text-muted-foreground hover:text-foreground h-7 w-7"
-                    onClick={handleRegenerateCloze}
+                    onClick={() => setClozeRegenTrigger(p => p + 1)}
                     disabled={isBusy || !selectedText}
                     title="Regenerate Cloze"
                 >
-                    <ArrowClockwise size={14} className={isGeneratingCloze ? "animate-spin" : ""} />
+                    <ArrowClockwise size={14} className={isRegeneratingCloze ? "animate-spin" : ""} />
                 </Button>
              </div>
           </div>
@@ -303,21 +292,20 @@ export const FlashcardCreatorPopup: React.FC<FlashcardCreatorPopupProps> = ({
               id="cloze-text"
               value={translatedClozeText ?? clozeText}
               onChange={(e) => setClozeText(e.target.value)}
-              placeholder={isGeneratingCloze ? loadingPlaceholder : "Sentence with {{c1::cloze}}..."}
+              placeholder={isClozeBusy ? loadingPlaceholder : "Sentence with {{c1::cloze}}..."}
               rows={5}
-              disabled={isGeneratingCloze || isTranslatingCloze}
+              disabled={isClozeBusy}
             />
           </div>
         </fieldset>
       </div>
 
-      {/* Footer Actions (Save Only) - Remove top border */}
        <div className="flex items-center mt-auto shrink-0 pt-2 gap-2">
-            {/* Save Button */}
+            <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
             <Button
                 size="sm"
                 onClick={handleSave}
-                disabled={isBusy || !canSave} 
+                disabled={!canSave}
                 className="w-full" 
             >
                 Save

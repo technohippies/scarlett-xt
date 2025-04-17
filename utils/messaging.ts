@@ -77,6 +77,12 @@ export interface GetOllamaModelsResponse {
   error?: string;
 }
 
+// Add PageInfo type if not defined elsewhere
+export interface PageInfo { // Assuming this structure based on App.tsx usage
+  title: string;
+  url: string;
+}
+
 // Define the overall protocol map for type safety
 export interface ProtocolMap {
   // Message from Popup -> Background to trigger clipping
@@ -103,12 +109,18 @@ export interface ProtocolMap {
   // == Translation ==
   translateText: (data: { text: string; targetLanguage: string }) => Promise<string | null>; // Direct request/response for now
 
+  // == Popup Data Requests ==
+  getSelectedText: () => Promise<{ text: string } | null>; // Define expected return type
+  getPageInfo: () => Promise<PageInfo | null>; // Define expected return type
+
+  // == Internal Background <-> Content Script Communication ==
+  _requestSelectionFromContentScript: () => Promise<{ text: string } | null>; // Message BG sends to CS
+
   // == Other existing types ==
   streamOllamaRequest: { prompt: string; history: ChatMessage[]; config: any };
   saveConfiguration: { configJson: string };
   loadConfiguration: null;
   queryDb: { query: string; params?: any[] };
-  GET_SELECTED_TEXT: null;
 }
 
 // Type for the message structure

@@ -194,17 +194,21 @@ export default defineBackground(() => {
   onMessage('generateFlashcardContent', async (message) => {
     console.log('[Background] Received generateFlashcardContent message', message.data);
     const { text } = message.data;
-    const responseTarget = 'flashcardGenerationResult'; // Target for the response
+    const responseTarget = 'flashcardGenerationResult';
     
     if (!text) {
       console.error('[Background] No text provided for flashcard generation.');
       sendMessage(responseTarget, null).catch(e => console.error("Failed to send null result:", e));
-      return; // Handler returns void
+      return;
     }
 
     try {
         const result = await generateFlashcardContentFromText(text);
         console.log('[Background] Received result from llmService:', result);
+        
+        await new Promise(resolve => setTimeout(resolve, 50)); 
+        console.log('[Background] Attempting to send flashcard result after delay...');
+        
         sendMessage(responseTarget, result)
           .catch(e => console.error("Failed to send flashcard result:", e));
     } catch (error) {
@@ -212,10 +216,63 @@ export default defineBackground(() => {
         sendMessage(responseTarget, null)
           .catch(e => console.error("Failed to send error result:", e));
     }
-    // Handler returns void implicitly
   });
 
   // --- Listener for Chat History Requests ---
+  // ... (placeholder)
+
+  // +++ NEW LISTENER for getPageInfo +++
+  onMessage('getPageInfo', async () => {
+    console.log("[Background] Received getPageInfo request.");
+    try {
+      const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+      const currentTab = tabs[0];
+      if (currentTab && currentTab.url && currentTab.title) {
+        console.log("[Background] Sending page info:", { title: currentTab.title, url: currentTab.url });
+        // Ensure ProtocolMap expects Promise<PageInfo | null>
+        return { title: currentTab.title, url: currentTab.url };
+      } else {
+        console.warn("[Background] Could not get active tab info.");
+        return null;
+      }
+    } catch (error) {
+      console.error("[Background] Error getting page info:", error);
+      return null;
+    }
+  });
+
+  // +++ NEW LISTENER for getSelectedText +++
+  onMessage('getSelectedText', async () => {
+    console.log("[Background] Received getSelectedText request.");
+    try {
+      const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+      const currentTab = tabs[0];
+      const tabId = currentTab?.id;
+
+      if (tabId && currentTab.url?.startsWith('http')) {
+        console.log(`[Background] Sending _requestSelectionFromContentScript to tab ${tabId}`);
+        // Ensure ProtocolMap defines _requestSelectionFromContentScript
+        const response = await sendMessage('_requestSelectionFromContentScript', undefined, { tabId: tabId }); 
+        console.log(`[Background] Received response from content script for tab ${tabId}:`, response);
+        // Ensure ProtocolMap expects Promise<{ text: string } | null>
+        if (response && typeof response.text === 'string') {
+          return { text: response.text }; 
+        } else {
+          console.warn(`[Background] Invalid or empty response from content script for tab ${tabId}:`, response);
+          return null;
+        }
+      } else {
+        console.log(`[Background] Cannot get selection from non-http(s) URL or no active tab ID.`);
+        return null;
+      }
+    } catch (error) {
+      console.error("[Background] Error getting selected text:", error);
+      if (error instanceof Error && (error.message.includes('Could not establish connection') || error.message.includes('No receiving end'))) {
+          console.warn("[Background] Content script likely not injected or not responding on the active page.");
+      }
+      return null;
+    }
+  });
 
   // --- Add other background listeners here (e.g., alarms, other messages) ---
 
