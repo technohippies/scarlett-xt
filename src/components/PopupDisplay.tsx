@@ -2,8 +2,6 @@ import React from 'react';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Gear } from '@phosphor-icons/react';
-import { Label } from './ui/label';
-import { cn } from '../../lib/utils';
 import { CircleNotch, BookmarkSimple } from '@phosphor-icons/react';
 
 interface PopupDisplayProps {

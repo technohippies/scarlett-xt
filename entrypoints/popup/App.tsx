@@ -36,6 +36,13 @@ function App() {
   // Add a ref to track initial generation done
   const initialGenerationDone = React.useRef<boolean>(false);
 
+  // --- NEW Translation State --- 
+  const [translatedFlashcardBack, setTranslatedFlashcardBack] = useState<string | null>(null);
+  const [translatedClozeText, setTranslatedClozeText] = useState<string | null>(null);
+  const [isTranslatingFlashcard, setIsTranslatingFlashcard] = useState(false);
+  const [isTranslatingCloze, setIsTranslatingCloze] = useState(false);
+  // --- End NEW Translation State ---
+
   useEffect(() => {
     console.log("[App] Initializing popup...");
     setIsLoadingPopupData(true);
@@ -44,6 +51,11 @@ function App() {
     setGeneratedFlashcard(null); // Reset generation state on init
     setGeneratedCloze(null);
     setIsGenerating(false);
+    // Reset translation state on init
+    setTranslatedFlashcardBack(null);
+    setTranslatedClozeText(null);
+    setIsTranslatingFlashcard(false);
+    setIsTranslatingCloze(false);
 
     const fetchInitialData = async () => {
       try {
@@ -101,6 +113,9 @@ function App() {
     }
     console.log('[App] Sending generateFlashcardContent message to background...');
     setIsGenerating(true);
+    // Reset translation state when starting new generation
+    setTranslatedFlashcardBack(null);
+    setTranslatedClozeText(null);
     setStatus('Generating flashcard...');
     setStatusIsError(false);
     sendMessage('generateFlashcardContent', {
@@ -148,6 +163,11 @@ function App() {
           setGeneratedFlashcard(null);
           setGeneratedCloze(null);
         }
+        // Reset translation state when generation finishes
+        setTranslatedFlashcardBack(null);
+        setTranslatedClozeText(null);
+        setIsTranslatingFlashcard(false);
+        setIsTranslatingCloze(false);
       },
     );
     return unlisten;
@@ -185,7 +205,7 @@ function App() {
   };
 
   // Handler to save the generated flashcard
-  const handleSaveFlashcard = async (flashcardData: Partial<Flashcard>) => {
+  const handleSaveFlashcard = async (flashcardDataFromPopup: Partial<Flashcard>) => {
     if (!selectedText) {
       console.error('[PopupApp] Cannot save flashcard without selected text.');
       setStatus('Error: No text selected.');
@@ -193,51 +213,55 @@ function App() {
       return;
     }
 
+    // Combine generated data, popup data, and potentially translated data
     const completeFlashcardData = {
-      ...(generatedFlashcard ?? {}),
-      ...(generatedCloze ?? {}),
-      ...flashcardData,
+      front: generatedFlashcard?.front, // Prefer generated front
+      back: translatedFlashcardBack ?? generatedFlashcard?.back, // Use translation if available
+      cloze_text: translatedClozeText ?? generatedCloze?.text, // Use translation if available
+      ...flashcardDataFromPopup, // Include edits made in the popup
       source_highlight: selectedText,
       source_url: pageInfo?.url || undefined,
-      // Add other necessary fields with defaults if not provided
-      type: (generatedCloze ? 'cloze' : 'front_back') as Flashcard['type'], // Explicitly cast type
-      tags: flashcardData.tags || undefined,
-      context: flashcardData.context || undefined,
-      difficulty: flashcardData.difficulty || 0,
-      stability: flashcardData.stability || 0,
-      reps: flashcardData.reps || 0,
-      lapses: flashcardData.lapses || 0,
-      state: flashcardData.state || State.New,
-      due: flashcardData.due || new Date().toISOString(),
-      elapsed_days: flashcardData.elapsed_days || 0,
-      scheduled_days: flashcardData.scheduled_days || 0,
-      last_review: flashcardData.last_review || undefined,
+      // Determine type based on final cloze content
+      type: ((translatedClozeText ?? generatedCloze?.text) ? 'cloze' : 'front_back') as Flashcard['type'],
+      target_language: translatedFlashcardBack || translatedClozeText ? 'zh-CN' : undefined,
+      // Add required FSRS fields with defaults if not in flashcardDataFromPopup
+      difficulty: flashcardDataFromPopup.difficulty ?? 0,
+      stability: flashcardDataFromPopup.stability ?? 0,
+      reps: flashcardDataFromPopup.reps ?? 0,
+      lapses: flashcardDataFromPopup.lapses ?? 0,
+      state: flashcardDataFromPopup.state ?? State.New,
+      due: flashcardDataFromPopup.due ?? new Date().toISOString(),
+      elapsed_days: flashcardDataFromPopup.elapsed_days ?? 0,
+      scheduled_days: flashcardDataFromPopup.scheduled_days ?? 0,
+      last_review: flashcardDataFromPopup.last_review || undefined,
     };
 
     // Explicitly type the data being sent
     const cardDataToSend: Partial<Flashcard> = completeFlashcardData;
 
     console.log('[PopupApp] Sending saveFlashcardAndNotify message to background:', cardDataToSend);
+    setIsSaving(true); // Use isSaving state
     setStatus('Saving flashcard...');
     setStatusIsError(false);
 
     try {
-      // Send to background for saving and notification
       const savedFlashcard = await sendMessage('saveFlashcardAndNotify', { cardData: cardDataToSend });
 
       if (savedFlashcard) {
         console.log('[PopupApp] Flashcard saved via background:', savedFlashcard);
         setStatus('Flashcard saved successfully!');
         setStatusIsError(false);
-        // Optionally close popup or give other feedback
-        // setTimeout(window.close, 1000); // Close after 1 second
+        // Consider closing popup or giving other feedback
+        setTimeout(window.close, 1200); // Close after success
       } else {
-        throw new Error('Background returned null or undefined.');
+        throw new Error('Background returned null or undefined saving flashcard.');
       }
     } catch (error: any) {
       console.error('[PopupApp] Error saving flashcard via background:', error);
       setStatus(`Error saving flashcard: ${error.message}`);
       setStatusIsError(true);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -248,6 +272,66 @@ function App() {
   const openSettingsPage = () => {
     browser.runtime.openOptionsPage();
   };
+
+  // --- NEW Translation Handlers ---
+  const handleTranslateFlashcard = useCallback(async (text: string) => {
+    if (isTranslatingFlashcard) return;
+    console.log('[App] Translating flashcard back:', text);
+    setIsTranslatingFlashcard(true);
+    setTranslatedFlashcardBack('Translating...'); // Indicate loading
+    setStatus('Translating flashcard...');
+    setStatusIsError(false);
+    try {
+      const translated = await sendMessage('translateText', {
+        text: text,
+        targetLang: 'Mandarin Chinese'
+      });
+      setTranslatedFlashcardBack(translated);
+      setStatus('Translation complete.');
+    } catch (error: any) {
+      console.error('[App] Error translating flashcard back:', error);
+      setTranslatedFlashcardBack('[Translation Error]');
+      setStatus(`Error: ${error.message || 'Translation failed'}`);
+      setStatusIsError(true);
+    } finally {
+      setIsTranslatingFlashcard(false);
+    }
+  }, [isTranslatingFlashcard]); // Dependency: isTranslatingFlashcard to prevent concurrent calls
+
+  const handleTranslateCloze = useCallback(async (fullClozeText: string) => {
+    if (isTranslatingCloze) return;
+    console.log('[App] Translating cloze answer from:', fullClozeText);
+    setIsTranslatingCloze(true);
+    setTranslatedClozeText('Translating...'); // Indicate loading
+    setStatus('Translating cloze...');
+    setStatusIsError(false);
+    try {
+      const match = fullClozeText.match(/\{\{c1::(.*?)\}\}/);
+      if (match && match[1]) {
+        const originalAnswer = match[1];
+        const translatedAnswer = await sendMessage('translateText', {
+          text: originalAnswer,
+          targetLang: 'Mandarin Chinese'
+        });
+        const finalCloze = fullClozeText.replace(`{{c1::${originalAnswer}}}`, `{{c1::${translatedAnswer}}}`);
+        setTranslatedClozeText(finalCloze);
+        setStatus('Translation complete.');
+      } else {
+        console.warn("[App] Could not extract cloze answer for translation.");
+        setTranslatedClozeText('[No Answer Found for Translation]');
+        setStatus('Could not find cloze answer to translate.');
+        setStatusIsError(true);
+      }
+    } catch (error: any) {
+      console.error('[App] Error translating cloze answer:', error);
+      setTranslatedClozeText('[Translation Error]');
+      setStatus(`Error: ${error.message || 'Cloze translation failed'}`);
+      setStatusIsError(true);
+    } finally {
+      setIsTranslatingCloze(false);
+    }
+  }, [isTranslatingCloze]); // Dependency: isTranslatingCloze
+  // --- End NEW Translation Handlers ---
 
   // Render Loading State
   if (isLoadingPopupData) {
@@ -268,6 +352,14 @@ function App() {
           isGenerating={isGenerating}
           status={status}
           statusIsError={statusIsError}
+          // --- Pass Translation Props ---
+          onTranslateFlashcard={handleTranslateFlashcard}
+          onTranslateCloze={handleTranslateCloze}
+          translatedFlashcardBack={translatedFlashcardBack}
+          translatedClozeText={translatedClozeText}
+          isTranslatingFlashcard={isTranslatingFlashcard}
+          isTranslatingCloze={isTranslatingCloze}
+          // --- End Pass Translation Props ---
         />
       ) : pageInfo ? (
         <PopupDisplay
@@ -276,7 +368,7 @@ function App() {
           status={status}
           isSaving={isSaving}
           canClip={true}
-          onSaveBookmark={() => console.warn("Bookmark saving disabled")}
+          onSaveBookmark={handleSaveBookmark}
           saveButtonText="Save Bookmark" 
           statusIsError={statusIsError}
           tagsValue={tagsValue}
