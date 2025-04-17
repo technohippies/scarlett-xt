@@ -13,7 +13,7 @@ export interface Bookmark {
 // Matches the 'flashcards' table, integrating FSRS fields
 export interface Flashcard {
   id: number;
-  type: 'front_back' | 'cloze';
+  type: 'qa' | 'front_back' | 'cloze';
   front?: string;
   back?: string;
   cloze_text?: string;
