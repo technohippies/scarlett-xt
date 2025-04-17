@@ -17,6 +17,7 @@ const ChatPage: React.FC = () => {
   const [inputValue, setInputValue] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isHistoryLoading, setIsHistoryLoading] = useState<boolean>(true);
+  const [accumulatedResponse, setAccumulatedResponse] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [configLoaded, setConfigLoaded] = useState(false);
 
@@ -56,29 +57,49 @@ const ChatPage: React.FC = () => {
 
   useEffect(() => {
       console.log('[ChatPage] Setting up ollamaResponse listener.');
-      const cleanup = onMessage('ollamaResponse', (message) => {
+      
+      const cleanup = onMessage('ollamaResponse', async (message) => {
           const chunk = message.data;
           console.log('[ChatPage] Received ollamaResponse chunk:', chunk);
-          
-          // TODO: Refactor this completely.
-          // Instead of manipulating local state directly with chunks,
-          // accumulate the full response. On 'done' or 'error',
-          // call createChatMessage to save the final message/error,
-          // then call fetchChatHistory to refresh the UI.
 
-          // --- TEMPORARY / OLD LOGIC (REMOVE/REPLACE) --- 
-          /*
-          setMessages((prevMessages) => {
-              // ... existing complex chunk handling logic ...
-          });
-          */
-          // --- END TEMPORARY --- 
+          if (chunk.status === 'chunk') {
+              setAccumulatedResponse(prev => prev + (chunk.content || ''));
+          } else if (chunk.status === 'done' || chunk.status === 'error') {
+              setIsLoading(false);
+              const finalContent = accumulatedResponse + (chunk.status === 'error' ? `\n\nError: ${chunk.error}` : '');
+              setAccumulatedResponse('');
+              
+              if (finalContent.trim()) {
+                  try {
+                      console.log('[ChatPage] Saving final assistant message to DB...');
+                      await createChatMessage({
+                          role: 'assistant',
+                          content: finalContent.trim(),
+                      });
+                      console.log('[ChatPage] Refetching history after assistant message saved.');
+                      const updatedHistory = await getChatHistory();
+                      setMessages(updatedHistory);
+                  } catch (dbError) {
+                      console.error('[ChatPage] Failed to save assistant message to DB:', dbError);
+                  }
+              } else {
+                   console.log('[ChatPage] No content accumulated, not saving empty message.');
+              }
+          } else if (chunk.status === 'override_granted') {
+              setIsLoading(false); 
+              setAccumulatedResponse('');
+              console.warn('[ChatPage] Override granted, handling not fully implemented.');
+          }
       });
+
       return () => {
           console.log('[ChatPage] Cleaning up ollamaResponse listener.');
+          if (accumulatedResponse) {
+              console.warn('[ChatPage] Unmounting with accumulated response - message not saved.');
+          }
           cleanup();
       };
-  }, []);
+  }, [accumulatedResponse]);
 
   const handleInputChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputValue(event.target.value);
@@ -149,9 +170,14 @@ const ChatPage: React.FC = () => {
             </div>
           ) : (
             messages.map((item) => {
+              if (item.type === 'message' && (item.data.id === null || item.data.id === undefined)) {
+                  console.error('[ChatPage Render] Found message item with null/undefined ID:', item);
+              }
+
               switch (item.type) {
                 case 'message':
-                  return <ChatMessageBase key={`msg-${item.data.id}`} role={item.data.role} content={item.data.content} />;
+                  const messageKey = `msg-${item.data.id ?? item.data.timestamp ?? Math.random()}`;
+                  return <ChatMessageBase key={messageKey} role={item.data.role} content={item.data.content} />;
                 case 'bookmark':
                   return <BookmarkChatMessage key={`bm-${item.message.id}`} bookmark={item.bookmark} />; 
                 case 'flashcard':
