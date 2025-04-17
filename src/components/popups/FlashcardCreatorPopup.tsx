@@ -215,9 +215,6 @@ export const FlashcardCreatorPopup: React.FC<FlashcardCreatorPopupProps> = ({
 
   return (
     <div className="max-w-xl h-[500px] p-4 bg-background text-foreground border border-border rounded-lg shadow-md flex flex-col gap-3">
-      {status && (
-        <p className={cn("text-sm text-center mb-2", statusIsError ? "text-destructive" : "text-muted-foreground")}>{status}</p>
-      )}
       <div className="flex-grow overflow-y-auto pr-2 flex flex-col gap-3">
         <fieldset className="flex flex-col gap-3">
           <div className="flex justify-between items-center min-h-[36px]">
@@ -301,12 +298,11 @@ export const FlashcardCreatorPopup: React.FC<FlashcardCreatorPopupProps> = ({
       </div>
 
        <div className="flex items-center mt-auto shrink-0 pt-2 gap-2">
-            <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
             <Button
                 size="sm"
                 onClick={handleSave}
                 disabled={!canSave}
-                className="w-full" 
+                className="w-full"
             >
                 Save
             </Button>

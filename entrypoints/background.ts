@@ -1,6 +1,6 @@
 import browser from 'webextension-polyfill';
 import { onMessage, sendMessage, type ProtocolMap, OllamaStreamChunk } from '~/utils/messaging';
-import { loadUserConfig, streamChatResponse, generateFlashcardContentFromText } from '../src/services/llmService'; // Use relative path for LLM service import
+import { loadUserConfig, streamChatResponse, generateFlashcardContentFromText, translateText } from '../src/services/llmService'; // Use relative path for LLM service import
 
 console.log('Background script loaded.');
 
@@ -271,6 +271,25 @@ export default defineBackground(() => {
           console.warn("[Background] Content script likely not injected or not responding on the active page.");
       }
       return null;
+    }
+  });
+
+  // +++ NEW LISTENER for translateText +++
+  onMessage('translateText', async (message) => {
+    console.log("[Background] Received translateText request:", message.data);
+    const { text, targetLanguage } = message.data;
+    if (!text || !targetLanguage) {
+      console.error("[Background] Missing text or targetLanguage for translation.");
+      return null;
+    }
+    try {
+      // Assuming llmService.translateText handles loading config etc.
+      const translationResult = await translateText(text, targetLanguage);
+      console.log("[Background] Translation result from llmService:", translationResult);
+      return translationResult; // Return the string or null
+    } catch (error) {
+        console.error("[Background] Error during translation:", error);
+        return null; // Return null on error as per ProtocolMap definition
     }
   });
 
