@@ -16,6 +16,30 @@ const ChatPage: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Fetch and log configuration on mount from chrome.storage
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        // Read from chrome.storage.local
+        const storageResult = await browser.storage.local.get('userConfiguration');
+        console.log('[ChatPage] Raw Storage Result for config:', storageResult);
+        
+        if (storageResult && storageResult.userConfiguration) {
+          const config = storageResult.userConfiguration;
+          console.log('[ChatPage] Loaded User Configuration from storage:', config);
+          // You can store this config in state if needed for ChatPage logic
+          // setLoadedConfig(config); 
+        } else {
+          console.log('[ChatPage] No user configuration found in chrome.storage.local.');
+        }
+      } catch (error) {
+        console.error('[ChatPage] Error loading configuration from chrome.storage.local:', error);
+      }
+    };
+
+    fetchConfig();
+  }, []); // Empty dependency array means run once on mount
+
   const handleInputChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputValue(event.target.value);
   };

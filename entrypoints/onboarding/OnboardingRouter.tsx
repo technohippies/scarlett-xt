@@ -4,9 +4,6 @@ import OnInstallPage from './OnInstallPage'; // Renamed, corresponds to provider
 import ModelSelectionPage from './ModelSelectionPage'; // The next step
 // Import the payload type from ModelSelectionPage
 import { type SelectionPayload } from './ModelSelectionPage';
-// Import the database utility
-import { execDb } from '../../utils/db';
-import { queryDb } from '../../utils/db';
 
 type OnboardingStep = 'provider-selection' | 'model-selection' | 'complete'; // Add complete step
 
@@ -27,61 +24,37 @@ function OnboardingRouter() {
   // Update callback to be async and handle saving/closing
   const handleModelSelected = useCallback(async (payload: SelectionPayload) => {
     console.log("OnboardingRouter: Model selection confirmed:", payload);
-    setError(null); // Clear previous errors
-
-    // Combine provider config and model selection
+    setError(null); 
     const fullConfig = { 
-        ...savedConfig, // provider, endpoint, apiKey? 
-        ...payload     // chatModel, embeddingModel
+        ...savedConfig, 
+        ...payload     
     };
 
-    console.log("OnboardingRouter: Saving full configuration to DB:", fullConfig);
+    console.log("OnboardingRouter: Saving full configuration to chrome.storage.local:", fullConfig);
 
     try {
-      const configJson = JSON.stringify(fullConfig);
+      // Save directly to chrome.storage.local
+      await browser.storage.local.set({ userConfiguration: fullConfig });
+      console.log("OnboardingRouter: Configuration saved successfully to chrome.storage.local.");
 
-      // WORKAROUND: Parameterized UPDATE seems broken in PGlite/Offscreen.
-      // Manually interpolate the JSON string. Use with caution!
-      // Escape single quotes within the JSON string just in case.
-      const escapedConfigJson = configJson.replace(/'/g, "''"); 
-      const sql = `
-        UPDATE user_configuration
-        SET config_json = '${escapedConfigJson}' 
-        WHERE id = 1;
-      `;
+      // Add a small delay just in case storage needs a tick
+      await new Promise(resolve => setTimeout(resolve, 50)); 
 
-      // Use execDb with the interpolated SQL (no parameters)
-      const result = await execDb(sql); // No params array needed
-      console.log('DB Update Result (execDb, interpolated):', result);
-
-      // Check rowsModified from execDb result
-      let needsInsert = result?.rowsModified === 0;
-
-      if (needsInsert) { // Use the new flag
-        console.log('User configuration row likely not updated, attempting INSERT...');
-        // INSERT can still use parameters, as it seems less problematic
-        const insertSql = `INSERT INTO user_configuration (id, config_json, updated_at) VALUES (1, ?, CURRENT_TIMESTAMP);`;
-        await execDb(insertSql, [configJson]); // Use params for INSERT
-      }
-
-      console.log("OnboardingRouter: Configuration saved successfully (using interpolated UPDATE/param INSERT attempt).");
-
-      // Optional: Move to a simple complete step before closing?
-      // setCurrentStep('complete'); 
-      // For now, just close the tab directly
+      // --- Proceed to open new tab and close current one --- 
       const currentTab = await browser.tabs.getCurrent();
       if (currentTab?.id) {
+        console.log(`OnboardingRouter: Opening new tab page...`);
+        await browser.tabs.create({ url: browser.runtime.getURL("/newtab.html") });
         console.log(`OnboardingRouter: Closing onboarding tab ${currentTab.id}...`);
         await browser.tabs.remove(currentTab.id);
       }
 
-    } catch (dbError: any) { // Catch potential DB errors
-        console.error("OnboardingRouter: Error saving configuration to database:", dbError);
-        setError(`Failed to save configuration: ${dbError.message || String(dbError)}`);
-        // Don't close the tab on error, stay on model selection page
+    } catch (storageError: any) { // Catch potential storage errors
+        console.error("OnboardingRouter: Error saving configuration to chrome.storage.local:", storageError);
+        setError(`Failed to save configuration: ${storageError.message || String(storageError)}`);
     }
     
-  }, [savedConfig]); // Need savedConfig in dependency array
+  }, [savedConfig]);
 
   // Render the component for the current step
   switch (currentStep) {
