@@ -3,185 +3,184 @@ import browser from 'webextension-polyfill';
 import { Gear } from '@phosphor-icons/react'; // Import the Gear icon
 import { sendMessage } from '../../utils/messaging'; // Use the typed messaging from utils
 import PopupDisplay from '../../src/components/PopupDisplay'; // Update import path
+import { FlashcardCreatorPopup } from '../../src/components/popups/FlashcardCreatorPopup'; // Import the new component
 import { createBookmark, createFlashcard, createChatMessage, getChatHistory } from '../../utils/db'; // Import DB functions
-import { generateFlashcardPair } from '../../src/services/llmService'; // Import the new function
+import type { Flashcard } from '../../src/types/db'; // Import Flashcard type
+import { cn } from '../../lib/utils'; // Import the cn function
+import { Button } from '../../src/components/ui/button';
 
 // This component manages the state and logic for the popup
 function App() {
-  const [status, setStatus] = useState<string>('');
+  const [status, setStatus] = useState<string>('Initializing...'); // Start with initializing
   const [statusIsError, setStatusIsError] = useState<boolean>(false);
-  const [isSaving, setIsSaving] = useState<boolean>(false); // Renamed from isClipping
-  const [canClip, setCanClip] = useState<boolean>(false);
+  const [isSaving, setIsSaving] = useState<boolean>(false); 
   const [pageInfo, setPageInfo] = useState<{ title: string; url: string } | null>(null);
   const [tagsValue, setTagsValue] = useState<string>(''); // State for tags
+  const [selectedText, setSelectedText] = useState<string | null>(null); // State for selected text
+  const [isLoadingPopupData, setIsLoadingPopupData] = useState<boolean>(true); // Loading state for initial data fetch
 
-  // Get current tab info when popup opens
   useEffect(() => {
-    async function getCurrentTabInfo() {
+    async function getPopupData() {
+      setIsLoadingPopupData(true);
       setStatus('Loading page info...');
-      setCanClip(false);
+      setStatusIsError(false);
+      setPageInfo(null);
+      setSelectedText(null);
+
       try {
         const tabs = await browser.tabs.query({ active: true, currentWindow: true });
         const currentTab = tabs[0];
+        const tabId = currentTab?.id;
 
-        if (currentTab?.url && currentTab?.title) {
-          // Check if it's a clippable page (http/https)
-          if (currentTab.url.startsWith('http://') || currentTab.url.startsWith('https://')) {
-             setPageInfo({ title: currentTab.title, url: currentTab.url });
-             setStatus(''); // Clear status
-             setCanClip(true); // Enable clipping
-             setStatusIsError(false);
-          } else {
-             // Non-clippable page: Show empty state, disable clipping, neutral status
-             setPageInfo(null); // Clear page info
-             setStatus('No text found'); 
-             setCanClip(false); 
-             setStatusIsError(false); // Not an error state
-          }
+        if (!tabId) throw new Error("Could not get active tab ID.");
+        if (!currentTab?.url || !currentTab?.title) throw new Error("Could not get tab URL or title.");
+
+        let canInteract = false;
+        if (currentTab.url.startsWith('http://') || currentTab.url.startsWith('https://')) {
+           setPageInfo({ title: currentTab.title, url: currentTab.url });
+           canInteract = true;
         } else {
-          // Still treat inability to get info as an error state
-          setPageInfo(null);
-          setStatus('Could not get current page information.');
-          setCanClip(false);
-          setStatusIsError(true);
+           setStatus('Cannot save from this page.');
+           // Keep pageInfo null, selectedText null
         }
+
+        // Attempt to get selected text ONLY if we can interact with the page
+        if (canInteract) {
+            let text = '';
+            try {
+                text = await browser.tabs.sendMessage(tabId, { type: 'GET_SELECTED_TEXT' });
+                console.log('[PopupApp] Received selected text:', text);
+            } catch (error) {
+                console.warn('[PopupApp] Failed to get selected text from content script (maybe none selected or script not ready):', error);
+                text = ''; // Assume no text if error
+            }
+            setSelectedText(text || ''); // Set to empty string if null/undefined, differentiating from initial null
+            setStatus(''); // Clear loading status if successful
+        }
+
       } catch (error) {
-        console.error('Error getting current tab:', error);
-        setStatus(`Error fetching page info: ${error instanceof Error ? error.message : String(error)}`);
+        console.error('[PopupApp] Error getting popup data:', error);
+        setStatus(`Error: ${error instanceof Error ? error.message : String(error)}`);
         setStatusIsError(true);
+      } finally {
+        setIsLoadingPopupData(false);
       }
     }
-    getCurrentTabInfo();
+    getPopupData();
   }, []);
 
   const handleTagsChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     setTagsValue(event.target.value);
   };
 
-  // Renamed from handleClip
-  const handleSave = async () => {
-    if (!pageInfo || !canClip || isSaving) {
-      return;
-    }
+  // Handler for saving a bookmark (when no text is selected)
+  const handleSaveBookmark = async () => {
+    if (!pageInfo || isSaving) return;
 
     setIsSaving(true);
-    setStatus('Processing...');
+    setStatus('Saving bookmark...');
     setStatusIsError(false);
+    const currentTags = tagsValue.split(',').map(tag => tag.trim()).filter(Boolean).join(',');
 
     try {
-      const tabs = await browser.tabs.query({ active: true, currentWindow: true });
-      const activeTab = tabs[0];
-      if (!activeTab?.id) throw new Error("Could not get active tab ID.");
-
-      // 1. Get selected text from content script
-      let selectedText = '';
-      try {
-          selectedText = await browser.tabs.sendMessage(activeTab.id, { type: 'GET_SELECTED_TEXT' });
-      } catch (error) {
-          console.warn('[PopupApp] Failed to get selected text from content script:', error);
-          // Potentially the content script hasn't loaded yet or access is denied.
-          // Proceed assuming no text is selected.
-          selectedText = '';
-      }
-      
-      const currentTags = tagsValue.split(',').map(tag => tag.trim()).filter(Boolean).join(','); // Store tags as comma-separated string
-
-      // 2. Check if text is selected
-      if (!selectedText) {
-        // --- Create Bookmark --- 
-        setStatus('Saving bookmark...');
-        const newBookmark = await createBookmark({
-          url: pageInfo.url,
-          title: pageInfo.title,
-          tags: currentTags,
-        });
-        await createChatMessage({ role: 'bookmark', bookmark_id: newBookmark.id });
-        setStatus('Bookmark saved successfully!');
-
-      } else {
-        // --- Create Flashcards --- 
-        setStatus('Generating flashcards...');
-        console.log('Selected Text:', selectedText);
-
-        // Call the new LLM service function
-        const flashcardContent = await generateFlashcardPair(selectedText, pageInfo.url);
-
-        if (!flashcardContent) {
-             // Throw error or set status and return
-             setStatus('Error: Failed to generate flashcard content from LLM.');
-             setStatusIsError(true);
-             // Don't set isSaving=false here yet, it's done in finally block
-             throw new Error('Failed to generate flashcard content.'); 
-        }
-
-        // Create Front/Back card
-        const frontBackCard = await createFlashcard({
-            type: 'front_back',
-            front: flashcardContent.frontBack.front,
-            back: flashcardContent.frontBack.back,
-            source_url: pageInfo.url,
-            source_highlight: selectedText,
-            tags: currentTags
-        });
-        await createChatMessage({ role: 'flashcard', flashcard_id: frontBackCard.id });
-        
-        // Create Cloze card
-        const clozeCard = await createFlashcard({
-            type: 'cloze',
-            cloze_text: flashcardContent.cloze.text,
-            source_url: pageInfo.url,
-            source_highlight: selectedText,
-            tags: currentTags
-        });
-        await createChatMessage({ role: 'flashcard', flashcard_id: clozeCard.id });
-
-        setStatus('Flashcards created successfully!');
-      }
-
-      // TODO: Refresh chat history display here
-      // e.g., fetchChatHistory().then(setHistoryState);
-
-      setCanClip(false); // Optionally disable after successful save
-      // setTimeout(() => window.close(), 1500); // Optional: close popup
-
+      const newBookmark = await createBookmark({
+        url: pageInfo.url,
+        title: pageInfo.title,
+        tags: currentTags,
+      });
+      await createChatMessage({ role: 'bookmark', bookmark_id: newBookmark.id });
+      setStatus('Bookmark saved!');
+      setTimeout(() => window.close(), 1200); // Close after success
     } catch (error) {
-      console.error('Error during save process:', error);
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      if (errorMsg.includes('Could not establish connection')) {
-         setStatus('Error: Background service not responding.');
-      } else if (errorMsg.includes('No tab with id')) {
-         setStatus('Error: Could not communicate with page.');
-      } else {
-         setStatus(`Error: ${errorMsg}`);
-      }
+      console.error('[PopupApp] Error saving bookmark:', error);
+      setStatus(`Error saving bookmark: ${error instanceof Error ? error.message : String(error)}`);
       setStatusIsError(true);
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Function to open the settings page
+  // Handler for saving a flashcard (passed to FlashcardCreatorPopup)
+  const handleSaveFlashcard = async (flashcardData: Partial<Flashcard>) => {
+      if (isSaving) return;
+
+      setIsSaving(true);
+      setStatus('Saving flashcard...');
+      setStatusIsError(false);
+      const currentTags = tagsValue.split(',').map(tag => tag.trim()).filter(Boolean).join(',');
+
+      try {
+         // Enrich with source URL and tags before saving
+         const dataToSave = {
+            ...flashcardData,
+            source_url: pageInfo?.url, // Add page URL as source if available
+            tags: currentTags,
+         };
+
+         // Validate essential fields before attempting DB operation
+         if (!dataToSave.type || (!dataToSave.front && !dataToSave.cloze_text)) {
+             throw new Error('Flashcard data is missing type or front/cloze content.');
+         }
+
+         // Remove id if present, DB assigns it
+         delete dataToSave.id;
+
+         const newFlashcard = await createFlashcard(dataToSave as Omit<Flashcard, 'id' | 'created_at' | keyof import('ts-fsrs').Card | 'due' | 'state' | 'last_review'>); // Type assertion needed
+         await createChatMessage({ role: 'flashcard', flashcard_id: newFlashcard.id });
+         setStatus('Flashcard saved!');
+         setTimeout(() => window.close(), 1200); // Close after success
+      } catch (error) {
+         console.error('[PopupApp] Error saving flashcard:', error);
+         setStatus(`Error saving flashcard: ${error instanceof Error ? error.message : String(error)}`);
+         setStatusIsError(true);
+      } finally {
+         setIsSaving(false);
+      }
+  };
+
+  const handleClosePopup = () => {
+    window.close();
+  };
+
   const openSettingsPage = () => {
     browser.runtime.openOptionsPage();
   };
 
+  // Render Loading State
+  if (isLoadingPopupData) {
+      return <div className="w-80 h-40 flex items-center justify-center p-4"><p className="text-muted-foreground">{status || 'Loading...'}</p></div>;
+  }
+
+  // Render Flashcard Creator or Bookmark Clipper based on selected text
   return (
-    <div className="relative min-w-[300px]"> {/* Only need relative wrapper if App had other elements, can likely be removed */} 
-      {/* Settings Gear Icon Button REMOVED FROM HERE */} 
-      
-      <PopupDisplay
-        pageTitle={pageInfo?.title}
-        pageUrl={pageInfo?.url}
-        status={status}
-        isClipping={isSaving} // Changed prop name
-        canClip={canClip}
-        onClip={handleSave} // Changed prop name
-        clipButtonText="Save" // Default text remains Save
-        statusIsError={statusIsError}
-        tagsValue={tagsValue}
-        onTagsChange={handleTagsChange}
-        onSettingsClick={openSettingsPage} // Pass the function down
-      />
+    <div className="relative min-w-[300px]">
+      {selectedText ? (
+        <FlashcardCreatorPopup 
+          selectedText={selectedText}
+          onSaveFlashcard={handleSaveFlashcard}
+          onClose={handleClosePopup}
+        />
+      ) : pageInfo ? (
+        <PopupDisplay
+          pageTitle={pageInfo.title}
+          pageUrl={pageInfo.url}
+          status={status}
+          isSaving={isSaving} // Pass isSaving state
+          canClip={true} // If pageInfo exists, we can bookmark
+          onSaveBookmark={handleSaveBookmark} // Pass bookmark save handler
+          saveButtonText="Save Bookmark" 
+          statusIsError={statusIsError}
+          tagsValue={tagsValue}
+          onTagsChange={handleTagsChange}
+          onSettingsClick={openSettingsPage} 
+        />
+      ) : (
+         // Fallback/Error state if pageInfo is null after loading
+         <div className="w-80 h-40 flex flex-col items-center justify-center p-4 text-center">
+            <p className={cn("mb-4", statusIsError ? "text-destructive" : "text-muted-foreground")}>{status || 'Cannot access page info.'}</p>
+             <Button variant="outline" size="sm" onClick={openSettingsPage}>Go to Settings</Button>
+         </div>
+      )}
     </div> 
   );
 }

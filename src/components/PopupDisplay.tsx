@@ -1,50 +1,48 @@
 import React from 'react';
-import { Button } from './ui/button'; // Update import path
-import { Textarea } from './ui/textarea'; // Update import path
-import { CircleNotch, Gear, BookmarkSimple } from '@phosphor-icons/react'; // Add BookmarkSimple import
+import { Button } from './ui/button';
+import { Textarea } from './ui/textarea';
+import { Gear } from '@phosphor-icons/react';
+import { Label } from './ui/label';
+import { cn } from '../../lib/utils';
+import { CircleNotch, BookmarkSimple } from '@phosphor-icons/react';
 
 interface PopupDisplayProps {
-  pageTitle?: string; // Add pageTitle prop
-  pageUrl?: string; // Add pageUrl prop
+  pageTitle?: string;
+  pageUrl?: string;
   status: string;
-  isClipping: boolean;
-  canClip: boolean; // Replaces the logic checking pageInfo
-  onClip: () => void;
-  clipButtonText?: string; // Optional override for button text
-  statusIsError?: boolean; // To easily style error messages
-  // Props for tags textarea
-  tagsValue?: string;
-  onTagsChange?: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
-  onSettingsClick?: () => void; // Add prop for settings click
+  isSaving: boolean;
+  canClip: boolean;
+  onSaveBookmark: () => void;
+  saveButtonText: string;
+  statusIsError: boolean;
+  tagsValue: string;
+  onTagsChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  onSettingsClick: () => void;
 }
 
-// This is a purely presentational component for the clipper popup UI.
-// It receives all state and callbacks via props.
 function PopupDisplay({ 
   pageTitle,
-  pageUrl, // Add pageUrl
+  pageUrl,
   status,
-  isClipping,
+  isSaving,
   canClip,
-  onClip,
-  clipButtonText = 'Save', // Changed default text
+  onSaveBookmark,
+  saveButtonText = 'Save',
   statusIsError = false,
   tagsValue = '',
   onTagsChange = () => {},
-  onSettingsClick = () => {} // Add default for settings click
+  onSettingsClick = () => {}
 }: PopupDisplayProps) {
 
-  const buttonContent = isClipping 
-    ? <CircleNotch size={16} className="h-4 w-4 animate-spin" /> // Just the spinner
-    : clipButtonText;
+  const buttonContent = isSaving 
+    ? <CircleNotch size={16} className="h-4 w-4 animate-spin" />
+    : saveButtonText;
 
   return (
     <div className="p-4 w-80 flex flex-col gap-3 bg-background text-foreground border border-border rounded-lg shadow-md">
       
-      {/* Conditionally render the main content only if clipping is possible */} 
       {canClip ? (
         <>
-          {/* Header Section */}
           <div className="flex justify-between items-center mb-2"> 
             <div className="flex items-center gap-1 text-lg font-semibold"> 
               <BookmarkSimple size={20} weight="fill" className="text-primary" />
@@ -61,7 +59,6 @@ function PopupDisplay({
             )}
           </div>
 
-          {/* Title Section */}
           {pageTitle && (
             <div className="flex items-center gap-2 text-base">
               <span className="font-medium w-16 shrink-0">Title:</span>
@@ -69,7 +66,6 @@ function PopupDisplay({
             </div>
           )}
           
-          {/* Source Section */}
           {pageUrl && (
             <div className="flex items-center gap-2 text-base">
               <span className="font-medium w-16 shrink-0">Source:</span>
@@ -77,7 +73,6 @@ function PopupDisplay({
             </div>
           )}
 
-          {/* Tags Section */}
           <div className="flex items-center gap-2 text-base">
             <label htmlFor="tags-textarea" className="font-medium w-16 shrink-0">Tags:</label>
             <Textarea 
@@ -90,22 +85,19 @@ function PopupDisplay({
             />
           </div>
 
-          {/* Action Button */}
           <Button 
-            onClick={onClip} 
-            disabled={!canClip || isClipping} // This condition is technically redundant now, but harmless
+            onClick={onSaveBookmark} 
+            disabled={!canClip || isSaving}
             variant="default" 
             size="default"
-            className={`w-full mt-2 ${isClipping ? 'flex justify-center items-center' : ''}`}
+            className={`w-full mt-2 ${isSaving ? 'flex justify-center items-center' : ''}`}
           >
             {buttonContent}
           </Button>
         </>
       ) : null} 
-      {/* End of conditionally rendered block */} 
 
-      {/* Status Message - Always shown, but centered and more prominent if !canClip */} 
-      {status && !isClipping && (
+      {status && !isSaving && (
         <div 
           className={`text-sm text-center mt-1 ${statusIsError ? 'text-destructive' : 'text-muted-foreground'} ${!canClip ? 'py-8' : ''}`}
         >
