@@ -50,22 +50,27 @@ export const FlashcardClozeMessage: React.FC<FlashcardClozeMessageProps> = ({
   if (source_url) hoverTitle += `\nSource: ${source_url}`;
 
   return (
-    <div
-      className="inline-flex items-center gap-2 mx-auto my-1 p-3 bg-white rounded-lg shadow-sm border border-gray-200 text-sm"
-      key={`fc-msg-${id}`} // Use flashcard ID for key
-      title={hoverTitle}
-    >
-      {/* Icon */}
-      <div className="flex-shrink-0">
-        {/* Using BracketsCurly icon, orange duotone */}
-        <BracketsCurly size={24} weight="duotone" className="text-orange-500" />
-      </div>
+    // Add outer wrapper for alignment
+    <div className="flex w-full my-2 justify-start">
+      <div
+        // Add max-w-[85%], keep existing padding and classes
+        className="inline-flex items-center gap-2 my-1 px-4 py-2 bg-white rounded-lg shadow-sm border border-gray-200 text-sm self-start max-w-[85%]"
+        key={`fc-msg-${id}`} 
+        title={hoverTitle}
+      >
+        {/* Icon */}
+        <div className="flex-shrink-0">
+          {/* Using BracketsCurly icon, orange duotone */}
+          <BracketsCurly size={24} weight="duotone" className="text-orange-500" />
+        </div>
 
-      {/* Content */}
-      <div className="flex-grow min-w-0">
-        {/* Display extracted cloze or placeholder */}
-        <span className="text-gray-800">{displayContent}</span>
+        {/* Content */}
+        <div className="flex-grow min-w-0">
+          {/* Display extracted cloze or placeholder */}
+          <span className="text-gray-800">{displayContent}</span>
+        </div>
       </div>
     </div>
+    // Close outer wrapper
   );
 }; 

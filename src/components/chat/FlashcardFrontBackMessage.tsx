@@ -41,23 +41,28 @@ export const FlashcardFrontBackMessage: React.FC<FlashcardFrontBackMessageProps>
   if (source_url) hoverTitle += `\nSource: ${source_url}`;
 
   return (
-    <div
-      className="inline-flex items-center gap-2 mx-auto my-1 p-3 bg-white rounded-lg shadow-sm border border-gray-200 text-sm"
-      key={`fb-msg-${id}`} // Use flashcard ID for key
-      title={hoverTitle}
-    >
-      {/* Icon */}
-      <div className="flex-shrink-0">
-        {/* Using Cards icon, orange duotone */}
-        <Cards size={24} weight="duotone" className="text-orange-500" />
-      </div>
+    // Add outer wrapper for alignment
+    <div className="flex w-full my-2 justify-start">
+      <div
+        // Add max-w-[85%], keep existing padding and classes
+        className="inline-flex items-center gap-2 my-1 px-4 py-2 bg-white rounded-lg shadow-sm border border-gray-200 text-sm self-start max-w-[85%]"
+        key={`fb-msg-${id}`} 
+        title={hoverTitle}
+      >
+        {/* Icon */}
+        <div className="flex-shrink-0">
+          {/* Using Cards icon, orange duotone */}
+          <Cards size={24} weight="duotone" className="text-orange-500" />
+        </div>
 
-      {/* Content */}
-      <div className="flex-grow min-w-0">
-        {displayFront && <span className="text-gray-800">{displayFront}</span>}
-        {displayFront && displayBack && <span className="text-gray-400 mx-1">|</span>}
-        {displayBack && <span className="text-gray-500">{displayBack}</span>}
+        {/* Content */}
+        <div className="flex-grow min-w-0">
+          {displayFront && <span className="text-gray-800">{displayFront}</span>}
+          {displayFront && displayBack && <span className="text-gray-400 mx-1">|</span>}
+          {displayBack && <span className="text-gray-500">{displayBack}</span>}
+        </div>
       </div>
     </div>
+    // Close outer wrapper
   );
 }; 

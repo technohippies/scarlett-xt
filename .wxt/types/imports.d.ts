@@ -57,6 +57,6 @@ declare global {
   export type { ScriptPublicPath, InjectScriptOptions } from 'wxt/utils/inject-script'
   import('wxt/utils/inject-script')
   // @ts-ignore
-  export type { OllamaStreamChunkStatus, OllamaStreamChunk, OllamaChatRequest, ChatMessage, ClipData, DbExecRequest, DbQueryRequest, GetOllamaModelsResponse, PageInfo, ProtocolMap, Message, FlashcardGenerationResult } from '/media/xo42/th427/Code/scarlett-wxt-storybook/utils/messaging'
+  export type { OllamaStreamChunk, OllamaChatRequest, ChatMessage, ClipData, DbExecRequest, DbQueryRequest, GetOllamaModelsResponse, PageInfo, ProtocolMap, Message, FlashcardGenerationResult } from '/media/xo42/th427/Code/scarlett-wxt-storybook/utils/messaging'
   import('/media/xo42/th427/Code/scarlett-wxt-storybook/utils/messaging')
 }

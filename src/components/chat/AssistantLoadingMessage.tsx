@@ -4,7 +4,7 @@ import { cn } from '../../../lib/utils';
 export const AssistantLoadingMessage: React.FC = () => {
   // Mimic base classes and assistant role classes for the bubble
   const baseClasses = 'py-2 px-4 rounded-lg max-w-[85%] text-base';
-  const roleClasses = 'bg-gray-100 text-gray-900 self-start';
+  const roleClasses = 'self-start';
   const alignmentClasses = 'justify-start';
 
   return (

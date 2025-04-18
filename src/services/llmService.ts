@@ -121,10 +121,7 @@ export async function streamChatResponse(request: { prompt: string; history: any
     console.error(`[llmService] Error during streamChat for ${config.provider}:`, error);
     // Ensure the error object conforms to OllamaStreamChunk
     sendMessage('ollamaResponse', {
-      model: config.chatModel, // Use the model from the config
-      created_at: new Date().toISOString(), // Current timestamp
-      done: true, // Indicate the stream (or error transmission) is done
-      status: 'error', // Custom status field
+      status: 'error', // Correctly use the status field
       error: error instanceof Error ? error.message : String(error)
     }).catch(e => console.error("Failed to send error chunk to UI:", e));
   }
@@ -369,9 +366,8 @@ function getProvider(config: LLMUserConfig): LLMChatProvider | null {
     }
 }
 
-// --- Flashcard Generation Function (Updated Parsing) ---
+// --- Flashcard Generation Function (Updated to use Streaming) ---
 export async function generateFlashcardContentFromText(text: string): Promise<{
-    // Updated structure
     flashcard: { front: string; back: string };
     cloze: { text: string };
   } | null> {
@@ -382,80 +378,96 @@ export async function generateFlashcardContentFromText(text: string): Promise<{
     const provider = getProvider(config);
     if (!provider) throw new Error(`Unsupported provider: ${config.provider}`);
 
-    if (!provider.chatCompletion) {
-        console.error(`[llmService] Provider ${config.provider} does not support non-streaming 'chatCompletion'. Cannot generate flashcards this way.`);
+    // --- Use streamChat instead of chatCompletion ---
+    if (!provider.streamChat) {
+        console.error(`[llmService] Provider ${config.provider} does not support streaming chat. Cannot generate flashcards.`);
         return null;
     }
 
-    // Use the updated prompt function
     const prompt = createFlashcardPrompt(text);
+    let accumulatedContent = '';
+    let streamError: string | null = null;
 
-    console.log("[llmService] Sending flashcard generation prompt to chatCompletion...");
-    // console.log("--- PROMPT ---"); // Optional: Log the full prompt for debugging
-    // console.log(prompt);
-    // console.log("--- END PROMPT ---");
+    console.log("[llmService] Sending flashcard generation prompt via streamChat...");
 
-    let fullResponse = '';
     try {
-        const response = await provider.chatCompletion({
-            prompt: prompt,
-            config: config,
-            history: [],
+        // Create a promise that resolves when the stream finishes
+        await new Promise<void>((resolve, reject) => {
+            const providerRequest: ProviderStreamChatRequest = {
+                prompt,
+                config,
+                history: [],
+                sendChunk: (chunk) => {
+                    if (chunk.status === 'chunk' && chunk.content) {
+                        accumulatedContent += chunk.content;
+                    } else if (chunk.status === 'error') {
+                        console.error("[llmService flashcard stream] Received error chunk:", chunk.error);
+                        streamError = chunk.error || 'Unknown streaming error';
+                        // Don't reject immediately, let it finish to potentially capture partial content?
+                        // Or reject here if errors should halt processing: reject(new Error(streamError)); 
+                    } else if (chunk.status === 'done' || chunk.status === 'complete') {
+                         console.log("[llmService flashcard stream] Stream finished.");
+                         resolve(); // Resolve the promise when done
+                    }
+                }
+            };
+            // Initiate the stream
+            provider.streamChat(providerRequest).catch(reject); // Reject promise on initial streamChat error
         });
 
-        if (!response?.message?.content) {
-            console.error("[llmService] LLM response via chatCompletion was empty or invalid.");
-            return null;
+        if (streamError) {
+             console.error("[llmService] Flashcard stream completed with error:", streamError);
+             // Potentially try parsing accumulatedContent anyway?
+             // return null; // For now, return null if stream had errors
         }
-        fullResponse = response.message.content;
 
-    } catch (error) {
-        console.error("[llmService] Error during LLM call (chatCompletion) for flashcard generation:", error);
-        return null;
-    }
+        if (!accumulatedContent) {
+             console.error("[llmService] Flashcard stream completed but accumulated content is empty.");
+             return null;
+        }
 
-    // --- Parse the entire LLM response as JSON ---
-    console.log("[llmService] Received raw LLM response for parsing:", fullResponse);
-    try {
-        // Attempt to find JSON block even if there's surrounding text/markdown
-        const jsonMatch = fullResponse.match(/```json\s*([\s\S]*?)\s*```|({[\s\S]*})/);
-        if (!jsonMatch || !jsonMatch[1] && !jsonMatch[2]) {
-             console.error("[llmService] Could not find JSON block in the LLM response.");
-             // Fallback: try parsing the whole thing if no block found
-             try {
-                 const parsedJson = JSON.parse(fullResponse.trim());
-                 // Validate the structure AFTER fallback parsing
-                 if (parsedJson.flashcard?.front && parsedJson.flashcard?.back && parsedJson.cloze?.text) {
-                     console.log("[llmService] Successfully parsed flashcard JSON from raw response (fallback).");
-                     return parsedJson as { flashcard: { front: string; back: string }; cloze: { text: string } };
-                 } else {
-                     console.error("[llmService] Parsed fallback JSON lacks expected structure:", parsedJson);
+        // --- Parse the accumulated response as JSON ---
+        console.log("[llmService] Received accumulated stream response for parsing:", accumulatedContent);
+        try {
+            const jsonMatch = accumulatedContent.match(/```json\s*([\s\S]*?)\s*```|({[\s\S]*})/);
+            if (!jsonMatch || (!jsonMatch[1] && !jsonMatch[2])) {
+                console.error("[llmService] Could not find JSON block in the accumulated stream response.");
+                 // Fallback attempt
+                 try {
+                     const parsedJson = JSON.parse(accumulatedContent.trim());
+                     if (parsedJson.flashcard?.front && parsedJson.flashcard?.back && parsedJson.cloze?.text) {
+                         console.log("[llmService] Successfully parsed flashcard JSON from raw stream response (fallback).");
+                         return parsedJson as { flashcard: { front: string; back: string }; cloze: { text: string } };
+                     } else {
+                         console.error("[llmService] Parsed fallback stream JSON lacks expected structure:", parsedJson);
+                         return null;
+                     }
+                 } catch (fallbackError) {
+                     console.error("[llmService] Failed to parse JSON directly from accumulated stream (fallback failed):", fallbackError);
                      return null;
                  }
-             } catch (fallbackError) {
-                 console.error("[llmService] Failed to parse JSON directly from LLM response (fallback failed):", fallbackError);
-                 return null;
-             }
-        }
-        
-        const jsonString = jsonMatch[1] || jsonMatch[2]; // Use captured group
-        const parsedJson = JSON.parse(jsonString.trim());
+            }
 
-        // Validate the structure
-        // Use 'flashcard' instead of 'qa'
-        if (parsedJson.flashcard?.front && parsedJson.flashcard?.back && parsedJson.cloze?.text) {
-            console.log("[llmService] Successfully parsed flashcard JSON from LLM response.");
-            // Return the object with the correct type
-            return parsedJson as { flashcard: { front: string; back: string }; cloze: { text: string } };
-        } else {
-            console.error("[llmService] Parsed JSON lacks expected structure (flashcard/cloze):", parsedJson);
+            const jsonString = jsonMatch[1] || jsonMatch[2];
+            const parsedJson = JSON.parse(jsonString.trim());
+
+            if (parsedJson.flashcard?.front && parsedJson.flashcard?.back && parsedJson.cloze?.text) {
+                console.log("[llmService] Successfully parsed flashcard JSON from accumulated stream response.");
+                return parsedJson as { flashcard: { front: string; back: string }; cloze: { text: string } };
+            } else {
+                console.error("[llmService] Parsed stream JSON lacks expected structure (flashcard/cloze):", parsedJson);
+                return null;
+            }
+        } catch (parseError) {
+            console.error("[llmService] Error parsing JSON from accumulated stream response:", parseError);
+            console.error("--- Accumulated Raw Content ---");
+            console.error(accumulatedContent);
+            console.error("--- End Accumulated Raw Content ---");
             return null;
         }
-    } catch (parseError) {
-        console.error("[llmService] Error parsing JSON from LLM response:", parseError);
-        console.error("--- Raw Content Received ---");
-        console.error(fullResponse);
-        console.error("--- End Raw Content ---");
+
+    } catch (error) {
+        console.error("[llmService] Error during flashcard generation stream setup or promise handling:", error);
         return null;
     }
 }

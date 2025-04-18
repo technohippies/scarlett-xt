@@ -61,39 +61,100 @@ const ChatPage: React.FC = () => {
       
       accumulatedResponseRef.current = '';
 
-      const cleanup = onMessage('ollamaResponse', async (message) => {
-          const chunk = message.data;
+      const cleanup = onMessage(
+        'ollamaResponse',
+        async (message) => {
+          const chunk = message.data as OllamaStreamChunk;
           console.log('[ChatPage] Received ollamaResponse chunk:', chunk);
+    
+          if (chunk.status === 'chunk' && chunk.content) {
+            // --- Detect and handle first chunk *before* updating messages state --- 
+            let isFirst = false;
+            const lastMessage = messages[messages.length - 1]; // Check current state *before* update
+            if (!(lastMessage && lastMessage.type === 'message' && lastMessage.data.role === 'assistant' && lastMessage.data.id === -1)) {
+              // If the last message isn't the temporary one, this must be the first chunk
+              isFirst = true;
+              console.log('[ChatPage] First chunk detected, setting isLoading to false.');
+              setIsLoading(false); // Hide loading indicator immediately
+            }
+            // ---------------------------------------------------------------------
 
-          if (chunk.status === 'chunk') {
-              accumulatedResponseRef.current += (chunk.content || '');
-          } else if (chunk.status === 'done' || chunk.status === 'error') {
-              setIsLoading(false);
-              const finalContent = accumulatedResponseRef.current + (chunk.status === 'error' ? `\n\nError: ${chunk.error}` : '');
-              accumulatedResponseRef.current = '';
-              
-              if (finalContent.trim()) {
-                  try {
-                      console.log('[ChatPage] Saving final assistant message to DB...');
-                      await createChatMessage({
-                          role: 'assistant',
-                          content: finalContent.trim(),
-                      });
-                      console.log('[ChatPage] Refetching history after assistant message saved.');
-                      const updatedHistory = await getChatHistory();
-                      setMessages(updatedHistory);
-                  } catch (dbError) {
-                      console.error('[ChatPage] Failed to save assistant message to DB:', dbError);
+            // --- Stream UI Update (remains the same) ---
+            setMessages(prevMessages => {
+              const currentLastItem = prevMessages[prevMessages.length - 1]; // Use prevMessages here
+              if (currentLastItem && currentLastItem.type === 'message' && currentLastItem.data.role === 'assistant' && currentLastItem.data.id === -1) { 
+                // Update existing temporary assistant message
+                return prevMessages.map((msg, index) => {
+                  if (index === prevMessages.length - 1 && msg.type === 'message') { 
+                    return { ...msg, data: { ...msg.data, content: (msg.data.content ?? '') + chunk.content } };
+                  }
+                  return msg;
+                });
+              } else {
+                // Add new temporary assistant message
+                const newAssistantMessage: ChatHistoryItem = {
+                  type: 'message',
+                  data: {
+                    id: -1, 
+                    role: 'assistant',
+                    content: chunk.content,
+                    timestamp: new Date().toISOString(),
+                  }
+                };
+                return [...prevMessages, newAssistantMessage];
+              }
+            });
+            accumulatedResponseRef.current += chunk.content; 
+            // --- End Stream UI Update ---
+          } else if (chunk.status === 'complete' || chunk.status === 'error' || chunk.status === 'done') {
+              // setIsLoading(false); // REMOVED - Loading is stopped on first chunk now
+              const finalContent = accumulatedResponseRef.current;
+              accumulatedResponseRef.current = ''; // Clear accumulator
+
+              // Remove the temporary message before saving/refetching
+              setMessages(prev => prev.filter(item => {
+                // Check item type before accessing data.id
+                if (item.type === 'message') {
+                  return item.data.id !== -1; // Keep if not the temporary message
+                }
+                return true; // Keep other item types (bookmarks, flashcards)
+              }));
+    
+              if (finalContent.trim() || chunk.status === 'error') { // Save even if only error content
+                  let contentToSave = finalContent.trim();
+                  if (chunk.status === 'error') {
+                     contentToSave += `\n\nError: ${chunk.error || 'Unknown Error'}`;
+                  }
+
+                  if (contentToSave) { // Ensure we don't save completely empty messages if error was blank
+                    try {
+                        console.log('[ChatPage] Saving final assistant message to DB...');
+                        await createChatMessage({
+                            role: 'assistant',
+                            content: contentToSave,
+                        });
+                        console.log('[ChatPage] Refetching history after assistant message saved.');
+                        const updatedHistory = await getChatHistory();
+                        setMessages(updatedHistory);
+                    } catch (dbError) {
+                        console.error('[ChatPage] Failed to save final assistant message to DB:', dbError);
+                        // Fallback: Re-add the final message directly to state if DB save fails (using a different temp ID if needed)
+                        setMessages(prevMessages => [
+                          ...prevMessages, // Keep history up to the point before temporary message removal
+                          { type: 'message', data: { id: Date.now(), role: 'assistant', content: contentToSave, timestamp: new Date().toISOString() } } 
+                        ]);
+                    }
                   }
               } else {
-                   console.log('[ChatPage] No content accumulated, not saving empty message.');
+                  console.log('[ChatPage] No final content, not saving empty message.');
+                  // If stream completed without error but no content, ensure loading is off
+                  setIsLoading(false); 
               }
-          } else if (chunk.status === 'override_granted') {
-              setIsLoading(false); 
-              accumulatedResponseRef.current = '';
-              console.warn('[ChatPage] Override granted, handling not fully implemented.');
+          } else {
+              console.warn('[ChatPage] Received unexpected or incomplete ollamaResponse chunk format:', chunk);
           }
-      });
+        },
+      );
 
       return () => {
           console.log('[ChatPage] Cleaning up ollamaResponse listener.');
@@ -116,21 +177,29 @@ const ChatPage: React.FC = () => {
        return;
      }
 
+    const newUserMessage: ChatHistoryItem = {
+      type: 'message',
+      data: {
+        id: Date.now(),
+        role: 'user',
+        content: trimmedInput,
+        timestamp: new Date().toISOString(),
+      }
+    };
+    setMessages(prevMessages => [...prevMessages, newUserMessage]);
+
     setInputValue('');
     setIsLoading(true);
 
-    let savedUserMessage: ChatMessageDb | null = null;
     try {
-      savedUserMessage = await createChatMessage({ role: 'user', content: trimmedInput });
-      console.log('[ChatPage] User message saved to DB:', savedUserMessage);
+      await createChatMessage({ role: 'user', content: trimmedInput });
 
       console.log(`[ChatPage] Sending ollamaChatRequest to background.`);
       const historyForLLM = messages.flatMap((item): { role: 'user' | 'assistant'; content: string }[] => {
           if (item.type === 'message' && (item.data.role === 'user' || item.data.role === 'assistant')) {
               return [{ role: item.data.role, content: item.data.content ?? '' }];
-          } else {
-              return []; // Return empty array for non-matching items
-          }
+          } 
+          return [];
       });
           
       await sendMessage('ollamaChatRequest', {
@@ -138,14 +207,9 @@ const ChatPage: React.FC = () => {
          history: historyForLLM,
       });
       
-      const updatedHistory = await getChatHistory();
-      setMessages(updatedHistory);
-
     } catch (error) {
-        console.error('[ChatPage] Error during send process:', error);
+        console.error('[ChatPage] Error during send process (saving/sending): ', error);
         setIsLoading(false);
-        const historyAfterError = await getChatHistory();
-        setMessages(historyAfterError);
     }
   }, [inputValue, isLoading, messages, configLoaded, isHistoryLoading]);
 
@@ -186,25 +250,21 @@ const ChatPage: React.FC = () => {
                 case 'flashcard':
                   if (item.flashcard.type === 'cloze') {
                      return <FlashcardClozeMessage key={`fc-${item.message.id}`} flashcard={item.flashcard} />;
-                  } else {
+                  } else if (item.flashcard.type === 'front_back') {
                      return <FlashcardFrontBackMessage key={`fb-${item.message.id}`} flashcard={item.flashcard} />;
                   }
-                default:
-                  console.warn('Unknown chat history item type:', item);
-                  return null;
+                  break;
               }
             })
           )}
-          
-          {isLoading && <AssistantLoadingMessage />} 
-
-          <div ref={messagesEndRef} />
+          {isLoading && <AssistantLoadingMessage />}
         </div>
+        <div ref={messagesEndRef} />
       </main>
 
       <footer className="sticky bottom-0 z-10 border-t bg-background p-4 md:p-6">
         <div className="mx-auto max-w-3xl">
-          <ChatInput 
+          <ChatInput
             value={inputValue}
             onChange={handleInputChange}
             onSend={handleSend}
@@ -216,4 +276,4 @@ const ChatPage: React.FC = () => {
   );
 };
 
-export default ChatPage; 
+export default ChatPage;

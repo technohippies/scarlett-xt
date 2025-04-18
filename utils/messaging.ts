@@ -8,24 +8,35 @@ import type { Flashcard } from '../src/types/db'; // Added Flashcard import
 
 // Define/Import required types
 // TODO: Ensure these types are correctly defined or imported if they exist elsewhere
-export type OllamaStreamChunkStatus = 'chunk' | 'done' | 'error' | 'override_granted';
+// export type OllamaStreamChunkStatus = 'chunk' | 'done' | 'error' | 'override_granted'; // Removed old status type
+
 export type OllamaStreamChunk = {
-  model: string;
-  created_at: string;
-  response?: string; // Optional: content chunk
+  model?: string; // Make optional as not all chunks have it
+  created_at?: string; // Make optional
+  content?: string; // Content chunk from Ollama provider
   message?: { // Optional: final message structure (check actual Ollama API)
     role: string;
     content: string;
   };
-  done: boolean; // Indicates completion
+  // done: boolean; // 'status' field replaces this
   total_duration?: number;
   load_duration?: number;
   prompt_eval_count?: number;
   prompt_eval_duration?: number;
   eval_count?: number;
   eval_duration?: number;
-  // Add status and error fields for our internal handling
-  status?: 'streaming' | 'complete' | 'error';
+  stats?: { // Include stats from Ollama provider's done chunk
+    model: string;
+    created_at: string;
+    total_duration?: number;
+    load_duration?: number;
+    prompt_eval_count?: number;
+    prompt_eval_duration?: number;
+    eval_count?: number;
+    eval_duration?: number;
+  };
+  // Updated status field to reflect actual usage
+  status: 'chunk' | 'complete' | 'error' | 'done'; 
   error?: string; 
 };
 export interface OllamaChatRequest {
@@ -100,7 +111,7 @@ export interface ProtocolMap {
 
   // == Chat Messages ==
   ollamaChatRequest: (data: OllamaChatRequest) => void; // Request trigger (stream handled separately)
-  ollamaResponse: OllamaStreamChunk; // Streamed chunks/result/error
+  ollamaResponse: OllamaStreamChunk; // Use the updated type
   getChatHistory: (data: { sessionId?: number | 'current' }) => Promise<ChatMessage[]>; // Direct request/response
   addSystemMessage: { content: string }; // Simple message
 

@@ -48,20 +48,25 @@ export const BookmarkChatMessage: React.FC<BookmarkChatMessageProps> = ({
   const hoverTitle = `${title || '(No Title)'} | ${url}`;
 
   return (
-    <div
-      className="inline-flex items-center gap-2 mx-auto my-1 p-3 bg-white rounded-lg shadow-sm border border-gray-200 text-sm"
-      key={`bm-msg-${id}`} // Use bookmark ID for key
-      title={hoverTitle} // Keep tooltip on the main visible part
-    >
-      {/* Icon */}
-      <div className="flex-shrink-0">
-        <BookmarkSimple size={24} weight="duotone" className="text-red-500" />
-      </div>
-      {/* Content - Using darker text */}
-      <div className="flex-grow min-w-0">
-        <span className="text-gray-900">{displayTitle || '(No Title)'}</span>
-        <span className="text-gray-600"> | {displayHostname}</span>
+    // Add outer wrapper for alignment
+    <div className="flex w-full my-2 justify-start">
+      <div
+        // Restore px-4, keep py-2 and other classes
+        className="flex items-center gap-2 my-1 px-4 py-2 bg-white rounded-lg shadow-sm border border-gray-200 text-sm self-start max-w-[85%]"
+        key={`bm-msg-${id}`} 
+        title={hoverTitle} 
+      >
+        {/* Icon */}
+        <div className="flex-shrink-0">
+          <BookmarkSimple size={24} weight="duotone" className="text-red-500" />
+        </div>
+        {/* Content - Using darker text */}
+        <div className="flex-grow min-w-0">
+          <span className="text-gray-900">{displayTitle || '(No Title)'}</span>
+          <span className="text-gray-600"> | {displayHostname}</span>
+        </div>
       </div>
     </div>
+    // Close outer wrapper
   );
 }; 
