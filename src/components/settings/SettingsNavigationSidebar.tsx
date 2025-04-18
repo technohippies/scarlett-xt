@@ -1,8 +1,7 @@
-import React from 'react';
-import { Robot, BookmarkSimple, Cards, ChatCircle } from '@phosphor-icons/react';
+import { Robot, BookmarkSimple, Cards, ChatCircle, ChartLine } from '@phosphor-icons/react';
 import { cn } from '../../../lib/utils';
 
-export type SettingsSection = 'models' | 'bookmarks' | 'flashcards' | 'chat';
+export type SettingsSection = 'overview' | 'models' | 'bookmarks' | 'flashcards' | 'chat';
 
 export interface SettingsNavigationSidebarProps {
   activeSection: SettingsSection;
@@ -10,6 +9,7 @@ export interface SettingsNavigationSidebarProps {
 }
 
 const navItems = [
+  { id: 'overview', label: 'Overview', Icon: ChartLine },
   { id: 'models', label: 'Models', Icon: Robot },
   { id: 'bookmarks', label: 'Bookmarks', Icon: BookmarkSimple },
   { id: 'flashcards', label: 'Flashcards', Icon: Cards },
@@ -29,7 +29,7 @@ export function SettingsNavigationSidebar({
             key={item.id}
             onClick={() => onSectionChange(item.id)}
             className={cn(
-              'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+              'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer',
               isActive
                 ? 'bg-muted text-primary hover:bg-muted'
                 : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'

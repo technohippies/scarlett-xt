@@ -19,13 +19,6 @@ interface Model {
   name: string;
 }
 
-// Placeholder data for Ollama embedding models
-const ollamaEmbeddingModels: Model[] = [
-  { id: "bge-m3:latest", name: "BGE M3 (Recommended)" },
-  { id: "nomic-embed-text:latest", name: "Nomic Embed Text" },
-  { id: "snowflake-arctic-embed2:latest", name: "Snowflake Arctic Embed" },
-];
-
 // Placeholder data for OpenRouter models
 const openRouterFreeModels: Model[] = [
   { id: "google/gemma-3-27b-it", name: "Google: Gemma 3 27B" },

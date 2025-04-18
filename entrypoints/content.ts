@@ -9,7 +9,7 @@ export default defineContentScript({
   // Specify if it needs to run at document_start, document_end, or document_idle
   runAt: 'document_end', 
 
-  async main(ctx) {
+  async main(_ctx) {
     console.log('[Scarlett Content Script] main() executing.');
 
     /**
@@ -37,7 +37,7 @@ export default defineContentScript({
     // Assuming we use the shared onMessage from utils/messaging:
     onMessage<'_requestSelectionFromContentScript'>(
       '_requestSelectionFromContentScript',
-      async (message: any) => {
+      async (_message: any) => {
         console.log('[Scarlett Content Script] Received _requestSelectionFromContentScript from background');
         const selectedText = window.getSelection()?.toString() || '';
         console.log(`[Scarlett Content Script] Returning selected text: "${selectedText.substring(0, 50)}..."`);

@@ -1,5 +1,5 @@
 import browser from 'webextension-polyfill';
-import { onMessage, sendMessage, type ProtocolMap, OllamaStreamChunk } from '~/utils/messaging';
+import { onMessage, sendMessage } from '~/utils/messaging';
 import { loadUserConfig, streamChatResponse, generateFlashcardContentFromText, translateText } from '../src/services/llmService'; // Use relative path for LLM service import
 import { createFlashcard, createChatMessage } from '../utils/db'; // Import DB functions
 import type { Flashcard } from '../src/types/db'; // Import Flashcard type
@@ -114,7 +114,8 @@ export default defineBackground(() => {
 
     if (!endpoint) {
       console.error('[Background] Error: Ollama endpoint not provided.');
-      sendMessage(responseTarget, { success: false, error: 'Ollama endpoint not provided.' })
+      // Include endpoint (which is null/undefined here) in the error response
+      sendMessage(responseTarget, { endpoint, success: false, error: 'Ollama endpoint not provided.' })
           .catch(e => console.error(`[Background] Failed to send ${responseTarget} error:`, e));
       return;
     }
@@ -135,20 +136,20 @@ export default defineBackground(() => {
       }
       
       const data = await response.json(); 
-      // Ensure data.models exists and is an array before mapping
       const models = Array.isArray(data?.models) ? data.models.map((tag: { name: string }) => ({ id: tag.name, name: tag.name })) : [];
       console.log('[Background] Successfully fetched Ollama models:', models);
-      sendMessage(responseTarget, { success: true, models: models })
+      // Include the endpoint in the success response
+      sendMessage(responseTarget, { endpoint, success: true, models: models })
         .catch(e => console.error(`[Background] Failed to send ${responseTarget} success:`, e));
 
     } catch (error: any) { 
       console.error('[Background] Error during fetch operation:', error);
       let errorMessage = (error instanceof Error) ? error.message : 'Unknown error fetching models.';
-      // Add specific check for permission-like errors if possible (difficult without seeing the exact error)
-      if (errorMessage.includes('Failed to fetch')) { // Generic fetch failure often indicates network/permission issues
+      if (errorMessage.includes('Failed to fetch')) {
           errorMessage += ". Ensure Ollama is running and reachable, and check extension host permissions.";
       }
-      sendMessage(responseTarget, { success: false, error: errorMessage })
+       // Include the endpoint in the catch block's error response
+      sendMessage(responseTarget, { endpoint, success: false, error: errorMessage })
         .catch(e => console.error(`[Background] Failed to send ${responseTarget} error:`, e));
     }
     // Handler returns void implicitly
@@ -165,7 +166,6 @@ export default defineBackground(() => {
        sendMessage('ollamaResponse', {
          model: 'unknown',
          created_at: new Date().toISOString(),
-         done: true,
          status: 'error',
          error: "LLM configuration not found. Please set it up in the settings."
        }).catch(e => console.error("Failed to send config error message:", e));
@@ -184,7 +184,6 @@ export default defineBackground(() => {
          sendMessage('ollamaResponse', {
            model: config.chatModel || 'unknown',
            created_at: new Date().toISOString(),
-           done: true,
            status: 'error',
            error: streamError instanceof Error ? streamError.message : "Error during streaming"
          }).catch(e => console.error("Failed to send stream error message:", e));

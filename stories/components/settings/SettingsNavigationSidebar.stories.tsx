@@ -18,7 +18,7 @@ const meta = {
   argTypes: {
     activeSection: {
       control: 'select',
-      options: ['models', 'bookmarks', 'flashcards', 'chat'],
+      options: ['overview', 'models', 'bookmarks', 'flashcards', 'chat'],
       description: 'The currently active settings section',
     },
     onSectionChange: { 
@@ -28,7 +28,7 @@ const meta = {
   },
   decorators: [
     (Story, { args }) => {
-      const initialSection = args.activeSection || 'models';
+      const initialSection = args.activeSection || 'overview';
       const [active, setActive] = useState<SettingsSection>(initialSection);
       
       const handleSectionChange = (section: SettingsSection) => {
@@ -53,7 +53,13 @@ type Story = StoryObj<typeof meta>;
 
 // === Stories ===
 
-export const Default: Story = {
+export const OverviewActive: Story = {
+  args: {
+    activeSection: 'overview',
+  },
+};
+
+export const ModelsActive: Story = {
   args: {
     activeSection: 'models',
   },

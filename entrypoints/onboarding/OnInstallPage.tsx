@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import browser from 'webextension-polyfill';
+// import { Button } from '../../src/components/ui/button';
 import { Button } from '../../src/components/ui/button';
 import { Input } from '../../src/components/ui/input';
 // import { Label } from '@radix-ui/react-label'; // No longer needed for local endpoint
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../src/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from '../../src/components/ui/toggle-group'; // Import ToggleGroup
-import { useProviderStatus, localProvidersConfig, LocalProviderConfig } from '../../src/hooks/useProviderStatus'; // Import the hook and config
+import { useProviderStatus, type LocalProviderConfig } from '../../src/hooks/useProviderStatus'; // Removed unused localProvidersConfig
 import type { LLMProvider } from '../../src/services/providers/types'; 
 import { cn } from "../../lib/utils"; // Import cn for styling
 // Import desired icons

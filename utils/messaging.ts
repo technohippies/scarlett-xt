@@ -85,6 +85,7 @@ interface OllamaModel {
 
 // *** EXPORT this interface ***
 export interface GetOllamaModelsResponse {
+  endpoint?: string; // Added optional endpoint field
   success: boolean;
   models?: OllamaModel[];
   error?: string;
