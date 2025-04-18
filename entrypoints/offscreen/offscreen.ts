@@ -4,18 +4,18 @@ import browser from 'webextension-polyfill'; // Needed for getURL
 import dbSchemaSql from '../utils/dbSchema.sql?raw'; // Use relative path
 // Restore @webext-core/messaging imports
 import { onMessage, type DbExecRequest, type DbQueryRequest } from '../utils/messaging'; 
-import { defineUnlistedScript } from 'wxt/utils/define-unlisted-script';
+// import { defineUnlistedScript } from 'wxt/utils/define-unlisted-script'; // Removed wrapper
 // import { vector } from '@electric-sql/pglite/vector'; // Remove unused import
 
 // Log immediately when the script starts executing
 console.log('[Offscreen Script] Top-level execution start.'); 
 
 // Offscreen script logic starts here, without the WXT wrapper
-// console.log('[Offscreen Script] Top-level script execution.'); // Moved inside define
+console.log('[Offscreen Script] Top-level script execution.'); // Restored this log
 
-export default defineUnlistedScript(() => {
+// export default defineUnlistedScript(() => { // Removed wrapper
   // Log immediately when the script starts executing
-  console.log('[Offscreen Script] defineUnlistedScript execution start.');
+  // console.log('[Offscreen Script] defineUnlistedScript execution start.'); // Removed wrapper log
 
   // Use 'any' for PGlite types with dynamic import
   let db: any = null;
@@ -137,4 +137,4 @@ export default defineUnlistedScript(() => {
   initDb().catch(e => console.error("[Offscreen Script] Proactive initDb failed:", e));
 
   console.log('[Offscreen Script] Setup complete.');
-}); // End of defineUnlistedScript
+// }); // End of defineUnlistedScript // Removed wrapper

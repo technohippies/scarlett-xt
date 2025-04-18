@@ -7,7 +7,7 @@ import { defineBackground } from 'wxt/utils/define-background';
 console.log('Background script loaded.');
 
 // --- Offscreen Document Management ---
-const OFFSCREEN_DOCUMENT_PATH = 'offscreen.html'; // Path to your offscreen document HTML
+const OFFSCREEN_DOCUMENT_PATH = 'offscreen/index.html'; // Path to your offscreen document HTML
 
 async function hasOffscreenDocument(): Promise<boolean> {
   // Check if the document is already open.
@@ -331,6 +331,31 @@ export default defineBackground(() => {
         priority: 1
       });
       return null;
+    }
+  });
+
+  // --- Listener to save user configuration ---
+  onMessage('saveConfiguration', async (message) => {
+    console.log('[Background] Received saveConfiguration request...'); // Log data reception
+    if (!message.data || !message.data.configJson) {
+      console.error("[Background] saveConfiguration message received without configJson.");
+      // The protocol map expects Promise<void>, so we throw an error on failure
+      // instead of returning an object.
+      throw new Error("No configuration JSON string received.");
+    }
+    try {
+      // Parse the JSON string to get the config object
+      const configObject = JSON.parse(message.data.configJson);
+      console.log('[Background] Parsed configuration object:', configObject);
+
+      // Save the parsed object under the userConfig key
+      await browser.storage.local.set({ userConfig: configObject });
+      console.log('[Background] User configuration saved successfully.');
+      // Promise<void> resolves implicitly on successful completion
+    } catch (error: any) {
+      console.error('[Background] Error saving user configuration:', error);
+      // Throw the error to signal failure, as the return type is Promise<void>
+      throw new Error(error.message || 'Unknown error saving config');
     }
   });
 

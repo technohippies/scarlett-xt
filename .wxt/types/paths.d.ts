@@ -268,7 +268,6 @@ declare module "wxt/browser" {
     | "/newtab.html"
     | "/offscreen.html"
     | "/onboarding.html"
-    | "/pglite-offscreen.js"
     | "/popup.html"
     | "/settings.html"
   type HtmlPublicPath = Extract<PublicPath, `${string}.html`>
