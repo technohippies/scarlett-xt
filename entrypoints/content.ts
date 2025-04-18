@@ -34,7 +34,7 @@ export default defineContentScript({
     });
 
     // Add listener for the 'ping' message used by background script
-    browser.runtime.onMessage.addListener((message: any, sender, sendResponse) => {
+    browser.runtime.onMessage.addListener((message: any, _sender: browser.Runtime.MessageSender, sendResponse: (response?: any) => void) => {
       if (message && message.type === 'ping') {
         console.log('[Scarlett Content Script] Received ping from background.');
         sendResponse({ pong: true });

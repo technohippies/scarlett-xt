@@ -219,8 +219,8 @@ export default defineBackground(() => {
   // ... (placeholder)
 
   // +++ NEW LISTENER for getPageInfo +++
-  onMessage('getPageInfo', async (message) => {
-    console.log("[Background] Received getPageInfo request.");
+  onMessage('getPageInfo', async () => {
+    console.log('[Background] Received getPageInfo request.');
     try {
       const tabs = await browser.tabs.query({ active: true, currentWindow: true });
       const currentTab = tabs[0];
@@ -238,8 +238,8 @@ export default defineBackground(() => {
   });
 
   // --- Listener for getSelectedText ---
-  onMessage('getSelectedText', async (message) => { 
-    console.log("[Background] Received getSelectedText request (from UI).");
+  onMessage('getSelectedText', async () => {
+    console.log('[Background] Received getSelectedText request (from UI).');
     try {
       const tabs = await browser.tabs.query({ active: true, currentWindow: true });
       const currentTab = tabs[0];
