@@ -37,35 +37,6 @@ async function setupOffscreenDocument() {
   }
 }
 
-// Setup offscreen document on background script startup
-// MOVED the direct call from here to browser.runtime.onStartup listener below
-// console.log('[Background] Temporarily skipped initial offscreen setup call for testing.');
-
-// Define the structure of the data expected from the clipper popup
-/*
-interface ClipData {
-  title: string;
-  url: string;
-  tags?: string[]; // Add optional tags array
-}
-*/
-
-// Define the structure for Ollama API response
-/*
-interface OllamaTag {
-  name: string;
-  // other properties like modified_at, size, digest etc. are ignored for now
-}
-
-interface OllamaTagsResponse {
-  models: OllamaTag[];
-}
-*/
-
-// --- Removed MessageHandler type definition ---
-// type MessageHandler<K extends keyof ProtocolMap> = 
-//   (message: { id: string; sender?: browser.runtime.MessageSender; data: ProtocolMap[K]['request'] }) => Promise<ProtocolMap[K]['response']> | ProtocolMap[K]['response'] | void;
-
 // defineBackground is globally available here thanks to WXT
 console.log('Background script setup starting...');
 

@@ -267,8 +267,8 @@ declare module "wxt/browser" {
     | "/lottie/slightly-happy.json"
     | "/newtab.html"
     | "/offscreen.html"
-    | "/offscreen.js"
     | "/onboarding.html"
+    | "/pglite-offscreen.js"
     | "/popup.html"
     | "/settings.html"
   type HtmlPublicPath = Extract<PublicPath, `${string}.html`>
