@@ -76,9 +76,11 @@ export async function loadUserConfig(): Promise<LLMUserConfig | null> {
   if (userConfigCache) return userConfigCache;
   console.log('[llmService] Loading user configuration from DB...');
   try {
-    const result = await queryDb('SELECT config_json FROM user_configuration WHERE id = 1;');
-    if (result?.rows?.[0]?.config_json) {
-      const config = JSON.parse(result.rows[0].config_json);
+    // queryDb returns the rows array directly
+    const resultRows = await queryDb('SELECT config_json FROM user_configuration WHERE id = 1;');
+    // Check the first row of the returned array
+    if (resultRows?.[0]?.config_json) { 
+      const config = JSON.parse(resultRows[0].config_json);
       console.log('[llmService] Loaded config:', config);
       userConfigCache = config; // Cache the loaded config
       return config;

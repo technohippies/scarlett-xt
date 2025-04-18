@@ -76,7 +76,7 @@ export async function execDb(sql: string): Promise<any> {
   return sendMessage('dbExec', { sql }); 
 }
 
-export async function queryDb(sql: string, params?: any[]): Promise<any> {
+export async function queryDb(sql: string, params?: any[]): Promise<any[]> {
   await ensureOffscreenDocument();
   // console.log('[DB Util] Sending dbQuery message:', { sql, params }); // Less verbose
   return sendMessage('dbQuery', { sql, params: params || [] }); 
@@ -103,9 +103,9 @@ export async function createBookmark(bookmarkData: Pick<Bookmark, 'url'> & Parti
         bookmarkData.tags ?? null,
         bookmarkData.embedding ?? null 
     ];
-    const result = await queryDb(sql, params);
-    if (!result?.rows?.[0]) throw new Error("Failed to create bookmark");
-    return result.rows[0] as Bookmark;
+    const resultRows = await queryDb(sql, params);
+    if (!resultRows?.[0]) throw new Error("Failed to create bookmark");
+    return resultRows[0] as Bookmark;
 }
 
 /**
@@ -155,11 +155,11 @@ export async function createFlashcard(flashcardData: Omit<Flashcard, 'id' | 'cre
         initialCardState.last_review?.toISOString() ?? null // Store as ISO string or null
     ];
 
-    const result = await queryDb(sql, params);
-    if (!result?.rows?.[0]) throw new Error("Failed to create flashcard");
+    const resultRows = await queryDb(sql, params);
+    if (!resultRows?.[0]) throw new Error("Failed to create flashcard");
     // Ensure the returned state is correctly typed if needed elsewhere immediately,
     // although reading from DB later should yield the string.
-    const savedFlashcard = result.rows[0] as Flashcard;
+    const savedFlashcard = resultRows[0] as Flashcard;
     // PGlite might return the numeric enum value if the column type affinity is integer,
     // but since it's TEXT, it should return the string we inserted.
     // If issues arise, manually cast here: savedFlashcard.state = State[savedFlashcard.state as number] as unknown as State;
@@ -184,10 +184,10 @@ export async function createChatMessage(messageData: Omit<ChatMessageDb, 'id' | 
         messageData.bookmark_id ?? null,
         messageData.flashcard_id ?? null
     ];
-    const result = await queryDb(sql, params);
-    if (!result?.rows?.[0]) throw new Error("Failed to create chat message");
-    console.log('[db.ts createChatMessage] Raw DB result row:', result.rows[0]); 
-    return result.rows[0] as ChatMessageDb;
+    const resultRows = await queryDb(sql, params); 
+    if (!resultRows?.[0]) throw new Error("Failed to create chat message"); 
+    console.log('[db.ts createChatMessage] Raw DB result row:', resultRows[0]); 
+    return resultRows[0] as ChatMessageDb;
 }
 
 /**
@@ -211,14 +211,14 @@ export async function getChatHistory(limit?: number): Promise<ChatHistoryItem[]>
         ${limit ? 'LIMIT ?' : ''}
     `;
     const params = limit ? [limit] : [];
-    const result = await queryDb(sql, params);
+    const resultRows = await queryDb(sql, params);
 
-    if (!result?.rows) return [];
+    if (!resultRows) return [];
 
-    console.log('[db.ts getChatHistory] Raw DB result rows:', result.rows);
+    console.log('[db.ts getChatHistory] Raw DB result rows:', resultRows);
 
     // Map the raw rows to the ChatHistoryItem union type
-    return result.rows.map((row: any): ChatHistoryItem => {
+    return resultRows.map((row: any): ChatHistoryItem => {
         const message: ChatMessageDb = {
             id: row.message_id, // Use the explicit alias here
             role: row.role,
@@ -284,8 +284,8 @@ export async function getDueFlashcards(now: Date = new Date()): Promise<Flashcar
         ORDER BY due ASC;
     `;
     const params = [now.toISOString()];
-    const result = await queryDb(sql, params);
-    return (result?.rows || []) as Flashcard[];
+    const resultRows = await queryDb(sql, params);
+    return (resultRows || []) as Flashcard[];
 }
 
 // Future functions (updateFlashcardState, deleteBookmark, etc.) can be added here.

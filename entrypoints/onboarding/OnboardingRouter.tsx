@@ -1,11 +1,11 @@
-import React, { useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import browser from 'webextension-polyfill'; // Import browser API
 import OnInstallPage from './OnInstallPage'; // The manual provider selection page
 import ModelSelectionPage from './ModelSelectionPage'; // The next step
 // Import the payload type from ModelSelectionPage
 import { type SelectionPayload } from './ModelSelectionPage';
 // Import the REFFACTORED db utility
-import { execDb, queryDb } from '../../utils/db'; 
+import { queryDb } from '../../utils/db'; 
 
 // Removed the placeholder detection component
 // const LLMDetectionPlaceholder: React.FC<{...}> = ...;

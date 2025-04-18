@@ -1,21 +1,10 @@
 import { defineConfig } from "wxt";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
-// Import searchRoot from vite
-import { searchForWorkspaceRoot } from 'vite';
-// Removed path import
-// import PgliteFilesModule from './modules/pglite-files.ts.disabled'; // Keep module commented/disabled
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
-  // srcDir: 'entrypoints', // Remove this - WXT defaults to ./entrypoints and this might cause path issues
-  // modules: [
-    // Add the React module explicitly
-    // '/@wxt-dev/module-react', // <<< Remove this again
-    // Uncomment i18n module if needed later
-    // "@wxt-dev/i18n/module"
-  // ], // Remove or comment out modules array if empty
-  vite: (env) => ({
+  vite: () => ({
     plugins: [tailwindcss()], // Only include tailwind plugin here
     resolve: {
       alias: {
@@ -26,44 +15,9 @@ export default defineConfig({
     optimizeDeps: {
       exclude: ['@electric-sql/pglite'],
     },
-    // Remove server config allow section
-    // server: {
-    //   fs: {
-    //     allow: [
-    //       searchForWorkspaceRoot(process.cwd()),
-    //     ],
-    //   },
-    // },
-    // assetsInclude: ["**/*.wasm", "**/*.data"], // Keep commented out unless needed
   }),
   manifest: {
-    // // Explicitly define entrypoints within manifest instead of relying solely on implicit discovery
-    // // entrypoints: { // <<< REMOVED, reverting to options_ui
-    // //   settings: {
-    // //     // Points to entrypoints/settings/index.html
-    // //     // WXT should automatically find entrypoints/settings/index.tsx
-    // //     page: "settings.html", // Use the HTML filename here
-    // //     options: {
-    // //       // These options are typically used for options_ui pages
-    // //       openInTab: true,
-    // //       browserStyle: false, // Set to false if you are using custom styling (like Tailwind)
-    // //     }
-    // //   },
-    // //   // Define other entrypoints like popup, background, newtab explicitly here if needed
-    // //   // Example:
-    // //   // popup: { page: "popup.html" },
-    // //   // background: { background: true }, // Assuming background.ts exists in entrypoints/
-    // //   // newtab: { page: "newtab.html" },
-    // // },
-    // // --- Add offscreen document definition --- 
-    // offscreen: {
-    //   // Points to entrypoints/offscreen/offscreen.html
-    //   // WXT should bundle entrypoints/offscreen/offscreen.ts as its script
-    //   page: "offscreen.html", 
-    // },
-    // // -----------------------------------------
     default_locale: "en", // Keep default locale
-    // Add the background script definition (can be omitted if defined in entrypoints above)
     background: {
       service_worker: "background.ts",
     },

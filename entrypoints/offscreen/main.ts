@@ -1,5 +1,3 @@
-/// <reference types="webextension-polyfill" />
-import browser from 'webextension-polyfill'; // Needed for getURL
 // Import the schema content as a raw string
 import dbSchemaSql from '../../utils/dbSchema.sql?raw'; // Use relative path
 // Restore @webext-core/messaging imports

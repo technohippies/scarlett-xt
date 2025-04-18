@@ -29,16 +29,14 @@ const ChatPage: React.FC = () => {
   useEffect(() => {
     const loadInitialData = async () => {
       setIsHistoryLoading(true);
-      let configFound = false;
       try {
         const configSql = 'SELECT config_json FROM user_configuration WHERE id = 1;';
-        const configResult = await queryDb(configSql); 
-        console.log('[ChatPage] Raw DB Result for config:', configResult);
-        if (configResult?.rows?.[0]?.config_json) {
-          const config = JSON.parse(configResult.rows[0].config_json);
+        const configRows = await queryDb(configSql); 
+        console.log('[ChatPage] Raw DB Result for config:', configRows);
+        if (configRows?.[0]?.config_json) {
+          const config = JSON.parse(configRows[0].config_json);
           console.log('[ChatPage] Loaded User Configuration from DB:', config);
           setConfigLoaded(true);
-          configFound = true;
         } else {
           console.log('[ChatPage] No user configuration found in DB.');
         }
@@ -69,11 +67,9 @@ const ChatPage: React.FC = () => {
     
           if (chunk.status === 'chunk' && chunk.content) {
             // --- Detect and handle first chunk *before* updating messages state --- 
-            let isFirst = false;
             const lastMessage = messages[messages.length - 1]; // Check current state *before* update
             if (!(lastMessage && lastMessage.type === 'message' && lastMessage.data.role === 'assistant' && lastMessage.data.id === -1)) {
               // If the last message isn't the temporary one, this must be the first chunk
-              isFirst = true;
               console.log('[ChatPage] First chunk detected, setting isLoading to false.');
               setIsLoading(false); // Hide loading indicator immediately
             }

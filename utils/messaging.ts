@@ -72,11 +72,6 @@ export interface DbQueryRequest {
   params?: any[]; // Optional params for query
 }
 
-// Define input/output for getOllamaModels
-interface GetOllamaModelsRequest {
-  endpoint: string;
-}
-
 // Define the structure of a model returned by the background
 interface OllamaModel {
   id: string;
