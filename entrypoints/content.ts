@@ -1,5 +1,6 @@
 import browser from 'webextension-polyfill';
 import { onMessage } from '../utils/messaging';
+import { defineContentScript } from 'wxt/utils/define-content-script';
 
 console.log('[Scarlett Content Script] Preparing...');
 
@@ -9,54 +10,40 @@ export default defineContentScript({
   // Specify if it needs to run at document_start, document_end, or document_idle
   runAt: 'document_end', 
 
-  async main(_ctx) {
+  async main(_ctx: any) {
     console.log('[Scarlett Content Script] main() executing.');
 
-    /**
-     * Listener for messages from other parts of the extension (popup, background).
-     */
-    browser.runtime.onMessage.addListener((message: any, sender: browser.Runtime.MessageSender): Promise<string> | boolean | void => {
-      console.debug('[Scarlett Content Script] Received message:', message, 'from:', sender.tab?.id);
-
-      if (message && typeof message === 'object' && message.type === 'GET_SELECTED_TEXT') {
-        const selectedText = window.getSelection()?.toString().trim() || '';
-        console.log(`[Scarlett Content Script] Responding with selected text: "${selectedText.substring(0, 50)}..."`);
-        // Return the promise directly for async response
-        return Promise.resolve(selectedText);
-      }
-
-      // Handle other message types here if needed in the future
-
-      // Explicitly return undefined or false if not handling the message or not async
-      // return false; 
-    });
-
-    // --- Listener for messages FROM the Background Script ---
-    // Use the same onMessage from the messaging utility if it's compatible
-    // or stick with webext-bridge if that's what's set up.
-    // Assuming we use the shared onMessage from utils/messaging:
-    onMessage<'_requestSelectionFromContentScript'>(
-      '_requestSelectionFromContentScript',
-      async (_message: any) => {
-        console.log('[Scarlett Content Script] Received _requestSelectionFromContentScript from background');
-        const selectedText = window.getSelection()?.toString() || '';
-        console.log(`[Scarlett Content Script] Returning selected text: "${selectedText.substring(0, 50)}..."`);
-        return { text: selectedText };
-      }
-    );
-
-    // Example: Listener for messages FROM the Popup/Other parts of the extension
-    // This might be used if the popup directly asked the content script
-    // onMessage('GET_SELECTED_TEXT', async () => {
-    //   console.log('[ContentScript] Received GET_SELECTED_TEXT request.');
-    //   const text = window.getSelection()?.toString();
-    //   console.log(`[ContentScript] Selected Text: "${text}"`);
-    //   return text;
+    // --- REMOVED Standard Listener ---
+    // browser.runtime.onMessage.addListener((message: any, sender: browser.Runtime.MessageSender): Promise<string> | boolean | void => {
+    //   console.debug('[Scarlett Content Script] Received message:', message, 'from:', sender.tab?.id);
+    //   if (message && typeof message === 'object' && message.type === 'GET_SELECTED_TEXT') {
+    //     const selectedText = window.getSelection()?.toString().trim() || '';
+    //     console.log(`[Scarlett Content Script] Responding with selected text: "${selectedText.substring(0, 50)}..."`);
+    //     return Promise.resolve(selectedText);
+    //   }
     // });
 
-    // Example: Sending a message TO the Background Script
-    // const response = await sendMessage('messageFromContentScript', { data: 'some payload' }, 'background');
-    // console.log('[ContentScript] Received response from background:', response);
+    // --- Listener for messages FROM the Background Script ---
+    // Listens for '_requestSelectionFromContentScript' using the shared messaging utility
+    onMessage('_requestSelectionFromContentScript', async (_message: any) => {
+      console.log('[Scarlett Content Script] Received _requestSelectionFromContentScript from background');
+      const selectedText = window.getSelection()?.toString() || '';
+      console.log(`[Scarlett Content Script] Returning selected text: "${selectedText.substring(0, 50)}..."`);
+      // Return structure matches ProtocolMap response type: Promise<{ text: string } | null>
+      return { text: selectedText }; 
+    });
+
+    // Add listener for the 'ping' message used by background script
+    browser.runtime.onMessage.addListener((message: any, sender, sendResponse) => {
+      if (message && message.type === 'ping') {
+        console.log('[Scarlett Content Script] Received ping from background.');
+        sendResponse({ pong: true });
+      }
+      // Always return true to satisfy strict TS type for listeners that *might* be async
+      return true;
+    });
+
+    console.log('[Scarlett Content Script] Listeners set up.');
 
     // You can add other content script logic here if necessary
   },

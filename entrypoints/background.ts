@@ -1,8 +1,7 @@
 import browser from 'webextension-polyfill';
-import { onMessage, sendMessage, type ProtocolMap } from '../utils/messaging';
+import { onMessage, sendMessage } from '../utils/messaging';
 import { loadUserConfig, streamChatResponse, generateFlashcardContentFromText, translateText } from '../src/services/llmService';
 import { createFlashcard, createChatMessage } from '../utils/db';
-import type { Flashcard } from '../src/types/db';
 import { defineBackground } from 'wxt/utils/define-background';
 
 console.log('Background script loaded.');
@@ -238,9 +237,9 @@ export default defineBackground(() => {
     }
   });
 
-  // +++ NEW LISTENER for getSelectedText +++
-  onMessage('getSelectedText', async (message) => {
-    console.log("[Background] Received getSelectedText request.");
+  // --- Listener for getSelectedText ---
+  onMessage('getSelectedText', async (message) => { 
+    console.log("[Background] Received getSelectedText request (from UI).");
     try {
       const tabs = await browser.tabs.query({ active: true, currentWindow: true });
       const currentTab = tabs[0];
@@ -248,10 +247,12 @@ export default defineBackground(() => {
         console.warn("[Background] Could not get active tab ID for script injection.");
         return null;
       }
+      const tabId = currentTab.id;
 
       let needsInjection = true;
       try {
-         const response = await browser.tabs.sendMessage(currentTab.id, { type: 'ping' });
+         // Ping check remains the same
+         const response = await browser.tabs.sendMessage(tabId, { type: 'ping' }); 
          if (response && (response as any).pong) {
             needsInjection = false;
          }
@@ -260,31 +261,36 @@ export default defineBackground(() => {
       }
 
       if (needsInjection) {
-        console.log(`[Background] Injecting content script into tab ${currentTab.id}...`);
+        console.log(`[Background] Injecting content script into tab ${tabId}...`);
         try {
             await browser.scripting.executeScript({
-                target: { tabId: currentTab.id },
+                target: { tabId: tabId }, // Use tabId variable
                 files: ['content-scripts/content.js'],
             });
             console.log(`[Background] Content script injected.`);
-            await new Promise(resolve => setTimeout(resolve, 100)); 
+            await new Promise(resolve => setTimeout(resolve, 100));
         } catch (injectionError: any) {
-            console.error(`[Background] Failed to inject content script into tab ${currentTab.id}:`, injectionError);
-            return null; 
+            console.error(`[Background] Failed to inject content script into tab ${tabId}:`, injectionError);
+            return null;
         }
       }
 
-      console.log("[Background] Sending getSelection message to content script...");
-      const selection = await browser.tabs.sendMessage(currentTab.id, { type: 'getSelection' });
-      console.log("[Background] Received selection from content script:", selection);
-      return selection && typeof (selection as any).text === 'string' ? { text: (selection as any).text } : null;
+      // Use the typed sendMessage to communicate with the content script
+      console.log(`[Background] Sending _requestSelectionFromContentScript message to tab ${tabId}...`);
+      // Pass undefined as data (since request is void) and specify tabId
+      const selection = await sendMessage('_requestSelectionFromContentScript', undefined, { tabId }); 
+      console.log("[Background] Received selection from content script via sendMessage:", selection);
+      // selection structure is { text: string } | null from ProtocolMap
+      return selection && typeof selection.text === 'string' ? { text: selection.text } : null;
 
     } catch (error: any) {
-      console.error("[Background] Error getting selected text:", error);
+      console.error("[Background] Error in getSelectedText handler:", error);
        if (error.message?.includes("Could not establish connection")) {
          console.warn("[Background] Connection error likely means the content script wasn't ready or page is restricted.");
        } else if (error.message?.includes("No matching message handler")) {
-         console.warn("[Background] 'No matching message handler' likely means the content script is not injected or listening correctly.");
+         console.warn("[Background] 'No matching message handler' likely means the content script is not injected or listening correctly for _requestSelectionFromContentScript.");
+       } else if (error.message?.includes("[messaging]")) { // Catch potential messaging format errors
+         console.warn("[Background] Messaging format error during getSelectedText. Check ProtocolMap and listeners.", error);
        }
       return null;
     }
