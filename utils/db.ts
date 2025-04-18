@@ -174,13 +174,14 @@ export async function createFlashcard(flashcardData: Omit<Flashcard, 'id' | 'cre
  */
 export async function createChatMessage(messageData: Omit<ChatMessageDb, 'id' | 'timestamp'>): Promise<ChatMessageDb> {
     const sql = `
-        INSERT INTO chat_messages (role, content, bookmark_id, flashcard_id)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO chat_messages (role, content, embedding, bookmark_id, flashcard_id)
+        VALUES ($1, $2, $3, $4, $5)
         RETURNING *;
     `;
     const params = [
         messageData.role,
         messageData.content ?? null,
+        messageData.embedding ?? null,
         messageData.bookmark_id ?? null,
         messageData.flashcard_id ?? null
     ];
@@ -201,7 +202,7 @@ export async function getChatHistory(limit?: number): Promise<ChatHistoryItem[]>
     const sql = `
         SELECT 
             m.id as message_id, -- Alias the message ID
-            m.role, m.content, m.bookmark_id, m.flashcard_id, m.timestamp,
+            m.role, m.content, m.embedding, m.bookmark_id, m.flashcard_id, m.timestamp, -- Include m.embedding
             b.id as bookmark_id_joined, b.url as bookmark_url, b.title as bookmark_title, b.saved_at as bookmark_saved_at, b.tags as bookmark_tags, b.embedding as bookmark_embedding, 
             f.id as flashcard_id_joined, f.* -- Select all flashcard fields
         FROM chat_messages m
@@ -223,6 +224,7 @@ export async function getChatHistory(limit?: number): Promise<ChatHistoryItem[]>
             id: row.message_id, // Use the explicit alias here
             role: row.role,
             content: row.content,
+            embedding: row.embedding,
             bookmark_id: row.bookmark_id, // This comes from m.*, should be correct
             flashcard_id: row.flashcard_id, // This comes from m.*, should be correct
             timestamp: row.timestamp,

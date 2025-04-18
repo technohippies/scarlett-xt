@@ -42,6 +42,7 @@ export interface ChatMessageDb {
   id: number;
   role: 'user' | 'assistant' | 'system' | 'bookmark' | 'flashcard';
   content?: string; // Text content
+  embedding?: string | null; // Optional vector embedding (stringified array)
   bookmark_id?: number; // FK to bookmarks
   flashcard_id?: number; // FK to flashcards
   timestamp: string; // ISO string format

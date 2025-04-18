@@ -23,8 +23,6 @@ export default defineConfig({
     },
     // Define the browser action (popup) (can be omitted if defined in entrypoints above)
     action: {
-      // default_title is often inferred from popup.html <title> by WXT, but can be set explicitly
-      // default_title: "Scarlett Clipper",
       default_popup: "popup.html", // Points to the entrypoint
       default_icon: { // Define the icon sizes here
         16: "/icon/16.png",
@@ -33,19 +31,18 @@ export default defineConfig({
         128: "/icon/128.png"
       }
     },
-    options_ui: { // <<< REINSTATED
+    options_ui: { 
       page: "settings.html",
       open_in_tab: true
     },
     chrome_url_overrides: {
-      newtab: "newtab.html" // Point to our newtab entrypoint
+      newtab: "newtab.html"
     },
     permissions: [
       "storage",
       "offscreen",
       "tabs",
       "notifications",
-      // Add any other permissions your extension needs back here
     ],
     // --- Add Optional Host Permissions ---
     optional_host_permissions: [
@@ -63,19 +60,6 @@ export default defineConfig({
     //   "alarms"
     ],
     web_accessible_resources: [
-      // Remove the specific entry for pglite wasm/data files
-      // {
-      //   resources: [
-      //     "/postgres.wasm", 
-      //     "/postgres.data"
-      //   ],
-      //   matches: ["<all_urls>"], 
-      // },
-      // Keep other necessary resources if any
-      // {
-      //   resources: ['assets/*'],
-      //   matches: ['<all_urls>']
-      // }
     ],
     // Add back other manifest sections like side_panel, action, commands if needed
     content_security_policy: { // Keep CSP for WASM

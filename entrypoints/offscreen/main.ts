@@ -4,7 +4,7 @@ import dbSchemaSql from '../../utils/dbSchema.sql?raw'; // Use relative path
 import { onMessage, type DbExecRequest, type DbQueryRequest } from '../../utils/messaging';
 // Import PGlite directly
 import { PGlite } from '@electric-sql/pglite'; 
-// import { vector } from '@electric-sql/pglite/vector'; // Keep vector import commented out if not used
+import { vector } from '@electric-sql/pglite/vector'; // Keep vector import commented out if not used
 
 // Log immediately when the script starts executing
 console.log('[Offscreen Script] Top-level execution start.');
@@ -32,11 +32,11 @@ async function initDb(): Promise<PGlite> { // Specify return type
       // Initialize PGlite using the static import
       // Ensure data directory is unique if multiple extensions use PGlite
       // Using 'idb://' prefix stores it in IndexedDB
-      const instance = new PGlite('idb://scarlett-wxt-db'/*, { 
-            // extensions: { vector } // Pass the imported extension if needed
-        }*/);
+      const instance = new PGlite('idb://scarlett-wxt-db', { 
+            extensions: { vector } // Pass the imported extension if needed
+        });
 
-      console.log("[Offscreen initDb] PGlite instance created (NO vector ext), awaiting ready...");
+      console.log("[Offscreen initDb] PGlite instance created (WITH vector ext), awaiting ready...");
       await instance.ready;
       console.log('[Offscreen initDb] PGlite instance ready.');
 
