@@ -22,12 +22,30 @@ export default defineConfig({
     },
   }),
   manifest: {
+    // Explicitly define entrypoints within manifest instead of relying solely on implicit discovery
+    // entrypoints: { // <<< REMOVED, reverting to options_ui
+    //   settings: {
+    //     // Points to entrypoints/settings/index.html
+    //     // WXT should automatically find entrypoints/settings/index.tsx
+    //     page: "settings.html", // Use the HTML filename here
+    //     options: {
+    //       // These options are typically used for options_ui pages
+    //       openInTab: true,
+    //       browserStyle: false, // Set to false if you are using custom styling (like Tailwind)
+    //     }
+    //   },
+    //   // Define other entrypoints like popup, background, newtab explicitly here if needed
+    //   // Example:
+    //   // popup: { page: "popup.html" }, 
+    //   // background: { background: true }, // Assuming background.ts exists in entrypoints/
+    //   // newtab: { page: "newtab.html" },
+    // },
     default_locale: "en", // Keep default locale
-    // Add the background script definition
+    // Add the background script definition (can be omitted if defined in entrypoints above)
     background: {
       service_worker: "background.ts",
     },
-    // Define the browser action (popup)
+    // Define the browser action (popup) (can be omitted if defined in entrypoints above)
     action: {
       // default_title is often inferred from popup.html <title> by WXT, but can be set explicitly
       // default_title: "Scarlett Clipper", 
@@ -39,17 +57,10 @@ export default defineConfig({
         128: "/icon/128.png"
       }
     },
-    // Add the options UI configuration
-    options_ui: {
+    options_ui: { // <<< REINSTATED
       page: "settings.html",
-      open_in_tab: true // Recommended for a welcome/settings page
+      open_in_tab: true 
     },
-    // Add the new model selection page (can also be accessed directly if needed)
-    // We might change how navigation works later, but define it for now
-    // "model-selection": {
-    //   "page": "model-selection.html",
-    //   "open_in_tab": true
-    // },
     chrome_url_overrides: {
       newtab: "newtab.html" // Point to our newtab entrypoint
     },

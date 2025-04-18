@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from '@storybook/test';
-import { MoodSelector, Mood } from '../../src/components/MoodSelector'; // Adjust path as needed
+import { MoodSelector } from '../../src/components/MoodSelector'; // Adjust path as needed
 
 const meta = {
   title: 'Components/MoodSelector',

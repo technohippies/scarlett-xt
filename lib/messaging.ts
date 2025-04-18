@@ -54,93 +54,67 @@ export function onMessage<T = any, R = any>(type: string, handler: MessageHandle
 // This single listener receives all messages and dispatches them to the correct handler
 // registered via onMessage.
 function setupCentralListener(): void {
+  // @ts-ignore - Also ignore the type check for hasListener
   if (browser.runtime.onMessage.hasListener(handleIncomingMessage)) {
     console.warn('[Messaging] Central listener already attached.');
     return;
   }
-  // @ts-ignore - Suppressing persistent type error with async listener
+  // @ts-ignore - Re-adding ignore due to persistent type error with async/sync dispatcher
   browser.runtime.onMessage.addListener(handleIncomingMessage);
   console.log('[Messaging] Central message listener attached.');
 }
 
 // The actual listener function added to browser.runtime.onMessage
 function handleIncomingMessage(message: any, sender: Runtime.MessageSender, sendResponse: (response?: any) => void): boolean | undefined {
-  const { type, data } = message || {};
-
-  if (!type || typeof type !== 'string') {
+  const { type, data } = message || {}; // Restore destructuring
+  
+  if (!type || typeof type !== 'string') { // Restore type check
     console.warn('[Messaging] Received message without valid type:', message);
-    // Cannot handle, return false for sync handling
     return false;
   }
 
-  console.debug(`[Messaging] Received: ${type}`, data, 'from:', sender.tab?.id || sender.id);
+  console.debug(`[Messaging] Received: ${type}`, data, 'from:', sender.tab?.id || sender.id); // Restore log
 
-  const handlers = listeners[type];
+  const handlers = listeners[type]; // Restore original lookup
   if (!handlers || handlers.length === 0) {
-    console.debug(`[Messaging] No handlers registered for type "${type}"`);
-    // No handler, return false (or undefined) for sync handling
-    // Allow other potential listeners (like in offscreen.ts) to handle it.
-    return false;
+    console.debug(`[Messaging] No handlers registered for type "${type}"`); // Restore log
+    return false; // Restore original return
   }
 
+  // Restore original loop logic
   let isAsync = false;
-  // Execute all handlers for this type
-  // Note: If multiple handlers exist, only the *first one* that returns
-  // a value (or promise) will have its response sent back via sendResponse.
-  // This matches the behavior of native browser.runtime.onMessage.
   for (const handler of handlers) {
     try {
       const result = handler({ type, data }, sender);
 
-      // Check if the handler returns a Promise (is async)
       if (result instanceof Promise) {
-        isAsync = true;
+        isAsync = true; // Restore setting isAsync
         result
           .then((response) => {
             console.debug(`[Messaging] Handler for "${type}" resolved:`, response);
-            try {
-              sendResponse(response);
-            } catch (e) {
-               // Handle error if the sending context is closed before response is ready
-               console.warn(`[Messaging] Failed to send async response for "${type}":`, e);
-            }
+            try { sendResponse(response); } catch (e) { console.warn(`[Messaging] Failed to send async response for "${type}":`, e); }
           })
           .catch((error: any) => {
             console.error(`[Messaging] Async handler for "${type}" rejected:`, error);
-             try {
-              // Optionally send back an error object on rejection
-               sendResponse({ error: error?.message || 'Handler failed' });
-             } catch (e) {
-                console.warn(`[Messaging] Failed to send async error response for "${type}":`, e);
-             }
+            try { sendResponse({ error: error?.message || 'Handler failed' }); } catch (e) { console.warn(`[Messaging] Failed to send async error response for "${type}":`, e); }
           });
         // IMPORTANT: Return true immediately as we are handling the response asynchronously.
         return true;
-      }
-      // If it's a synchronous handler that returned a value
-      else if (result !== undefined) {
+      } else if (result !== undefined) {
         console.debug(`[Messaging] Handler for "${type}" returned sync:`, result);
         sendResponse(result);
-        // Return false as we handled it synchronously.
-        return false;
-      }
-      // If the handler returned undefined (void), continue to next handler or finish.
+        return false; // Return false as we handled it synchronously.
+      } 
+      // If handler returned undefined, continue loop
     } catch (error: any) {
       console.error(`[Messaging] Sync handler for "${type}" threw error:`, error);
-      // Optionally send error back for sync errors too
-       try {
-           sendResponse({ error: error?.message || 'Handler failed' });
-       } catch (e) {
-           console.warn(`[Messaging] Failed to send sync error response for "${type}":`, e);
-       }
-      // Return false as we handled it synchronously (by catching the error).
-      return false;
+      try { sendResponse({ error: error?.message || 'Handler failed' }); } catch (e) { console.warn(`[Messaging] Failed to send sync error response for "${type}":`, e); }
+      return false; // Return false as we handled sync error.
     }
   }
 
-  // If we looped through all handlers and none handled the response asynchronously
-  // or synchronously returned a value, return false/undefined.
-  return false;
+  // If loop finished without returning true/false, return based on isAsync
+  return isAsync; // Original logic: returns true if any handler *was* async
 }
 
 // Call this once, typically when the background script starts.

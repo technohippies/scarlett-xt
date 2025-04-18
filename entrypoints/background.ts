@@ -1,5 +1,5 @@
 import browser from 'webextension-polyfill';
-import { onMessage, sendMessage } from '~/utils/messaging';
+import { onMessage, sendMessage, OllamaStreamChunk } from '~/utils/messaging';
 import { loadUserConfig, streamChatResponse, generateFlashcardContentFromText, translateText } from '../src/services/llmService'; // Use relative path for LLM service import
 import { createFlashcard, createChatMessage } from '../utils/db'; // Import DB functions
 import type { Flashcard } from '../src/types/db'; // Import Flashcard type
