@@ -1,0 +1,1 @@
+import{h as t,j as r,R as n}from"./db-BxpoVJEC.js";function c(o){const e=document.getElementById("root");e?(t.createRoot(e).render(r.jsxs(n.StrictMode,{children:[o," "]})),console.log("[renderRoot] React app rendered into #root")):typeof window<"u"&&console.error("[renderRoot] Could not find element with ID 'root' to render React app.")}export{c as r};

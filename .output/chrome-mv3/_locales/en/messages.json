@@ -1,0 +1,20 @@
+{
+  "onInstall_title": {
+    "message": "I'm Scarlett!"
+  },
+  "onInstall_configurePrompt": {
+    "message": "Tutor, lifecoach, friend."
+  },
+  "onInstall_localTab": {
+    "message": "Local"
+  },
+  "onInstall_onlineTab": {
+    "message": "Online"
+  },
+  "onInstall_detectedStatus": {
+    "message": "Detected"
+  },
+  "onInstall_apiKeyPlaceholder": {
+    "message": "Paste API key..."
+  }
+} 

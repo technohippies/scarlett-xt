@@ -136,6 +136,9 @@ export interface ProtocolMap {
 
   // == Internal Background <-> Content Script Communication ==
   _requestSelectionFromContentScript: () => Promise<{ text: string } | null>;
+
+  // == Offscreen Ping (for testing) ==
+  pingOffscreen: () => Promise<{ pong: boolean; timestamp: number }>;
 }
 
 // Type for the message structure

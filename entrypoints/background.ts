@@ -6,16 +6,18 @@ import { defineBackground } from 'wxt/utils/define-background';
 
 console.log('Background script loaded.');
 
-// --- Offscreen Document Management ---
-const OFFSCREEN_DOCUMENT_PATH = 'offscreen/index.html'; // Path to your offscreen document HTML
+// Define the path explicitly, matching the example
+const OFFSCREEN_DOCUMENT_PATH = '/offscreen.html';
 
 async function hasOffscreenDocument(): Promise<boolean> {
   // Check if the document is already open.
+  // Use the hardcoded path with getURL for checking existing contexts
+  const offscreenUrl = browser.runtime.getURL(OFFSCREEN_DOCUMENT_PATH);
   // @ts-ignore - clients is available but may show TS error
   const existingContexts = await browser.runtime.getContexts({
     // @ts-ignore - ContextType might be missing OFFSCREEN_DOCUMENT in older types
     contextTypes: ['OFFSCREEN_DOCUMENT'],
-    documentUrls: [browser.runtime.getURL(OFFSCREEN_DOCUMENT_PATH)] 
+    documentUrls: [offscreenUrl] // Use the resolved URL for checking
   });
   return existingContexts.length > 0;
 }
@@ -23,15 +25,25 @@ async function hasOffscreenDocument(): Promise<boolean> {
 async function setupOffscreenDocument() {
   if (!(await hasOffscreenDocument())) {
     console.log('[Background] Creating offscreen document...');
-    // @ts-ignore - browser.offscreen may not be in older types
-    await browser.offscreen.createDocument({
-      url: OFFSCREEN_DOCUMENT_PATH, 
-      // Use a valid reason - LOCAL_STORAGE is common if not using others like AUDIO_PLAYBACK
+    // Use the hardcoded path directly for creation, as in the WXT example
+    console.log(`[Background] Using offscreen path for creation: ${OFFSCREEN_DOCUMENT_PATH}`); 
+    try {
       // @ts-ignore - browser.offscreen may not be in older types
-      reasons: [browser.offscreen.Reason.LOCAL_STORAGE], 
-      justification: 'Database operations using PGlite',
-    });
-     console.log('[Background] Offscreen document created.');
+      await browser.offscreen.createDocument({
+        url: OFFSCREEN_DOCUMENT_PATH, // Use the hardcoded path directly
+        // Use a valid reason - LOCAL_STORAGE is common if not using others like AUDIO_PLAYBACK
+        // @ts-ignore - browser.offscreen may not be in older types
+        reasons: [browser.offscreen.Reason.LOCAL_STORAGE], 
+        justification: 'Database operations using PGlite',
+      });
+      console.log('[Background] Offscreen document creation requested.'); 
+      // It might take a moment for the document to actually load and run its script
+      await new Promise(resolve => setTimeout(resolve, 200)); // Add a small delay
+    } catch (error: any) {
+       console.error('[Background] Error creating offscreen document:', error);
+       // Re-throw the error so the caller knows it failed
+       throw error; 
+    }
   } else {
      console.log('[Background] Offscreen document already exists.');
   }

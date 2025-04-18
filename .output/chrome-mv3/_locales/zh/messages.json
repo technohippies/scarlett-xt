@@ -1,0 +1,20 @@
+{
+  "onInstall_title": {
+    "message": "欢迎使用 Scarlett！"
+  },
+  "onInstall_configurePrompt": {
+    "message": "请配置您的 LLM 连接。"
+  },
+  "onInstall_localTab": {
+    "message": "本地"
+  },
+  "onInstall_onlineTab": {
+    "message": "在线"
+  },
+  "onInstall_detectedStatus": {
+    "message": "已检测"
+  },
+  "onInstall_apiKeyPlaceholder": {
+    "message": "粘贴 API 密钥..."
+  }
+} 

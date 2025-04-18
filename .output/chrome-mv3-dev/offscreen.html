@@ -1,11 +1,14 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <script type="module" src="http://localhost:3000/@vite/client"></script>
+<script src="http://localhost:3000/@id/virtual:wxt-html-plugins" type="module"></script>
   <meta charset="UTF-8">
-  <title>PGlite Offscreen Document</title>
+  <title>Offscreen Document</title>
+  <!-- WXT should automatically link ./index.ts based on directory structure -->
+  <script type="module" src="http://localhost:3000/entrypoints/offscreen/main.ts"></script>  <script type="module" crossorigin="" src="/chunks/reload-html-f02QKjXp.js"></script>
 </head>
 <body>
-  <!-- This script will initialize PGlite -->
-  <script type="module" src="/offscreen.js"></script>
+  <p>Offscreen document for PGlite database operations.</p>
 </body>
 </html> 
