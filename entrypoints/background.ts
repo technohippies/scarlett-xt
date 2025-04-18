@@ -1,8 +1,9 @@
 import browser from 'webextension-polyfill';
-import { onMessage, sendMessage, OllamaStreamChunk } from '~/utils/messaging';
-import { loadUserConfig, streamChatResponse, generateFlashcardContentFromText, translateText } from '../src/services/llmService'; // Use relative path for LLM service import
-import { createFlashcard, createChatMessage } from '../utils/db'; // Import DB functions
-import type { Flashcard } from '../src/types/db'; // Import Flashcard type
+import { onMessage, sendMessage, type ProtocolMap } from '../utils/messaging';
+import { loadUserConfig, streamChatResponse, generateFlashcardContentFromText, translateText } from '../src/services/llmService';
+import { createFlashcard, createChatMessage } from '../utils/db';
+import type { Flashcard } from '../src/types/db';
+import { defineBackground } from 'wxt/utils/define-background';
 
 console.log('Background script loaded.');
 
@@ -62,164 +63,156 @@ interface OllamaTagsResponse {
 }
 */
 
-// defineBackground is globally available here thanks to WXT
-export default defineBackground(() => {
-  console.log('WXT Background defined');
+// --- Removed MessageHandler type definition ---
+// type MessageHandler<K extends keyof ProtocolMap> = 
+//   (message: { id: string; sender?: browser.runtime.MessageSender; data: ProtocolMap[K]['request'] }) => Promise<ProtocolMap[K]['response']> | ProtocolMap[K]['response'] | void;
 
-  // --- Setup the central message listener --- 
-  // This allows `onMessage` calls below to work.
-  // setupCentralListener();
+// defineBackground is globally available here thanks to WXT
+console.log('Background script setup starting...');
+
+// --- Start Background Logic (Wrapped in defineBackground) ---
+export default defineBackground(() => {
+  console.log('WXT Background defined (using wxt/utils/define-background)');
 
   // --- Listener for clipping requests from popup ---
   onMessage('clipPage', async (message) => {
     console.log('Background: Received clipPage message', message.data);
-    const { title, url } = message.data; // Destructure imported ClipData
+    if (!message.data) {
+      console.error("Background: clipPage message received without data.");
+      return;
+    }
+    const { title, url } = message.data;
 
     const sql = `INSERT INTO clips (title, url) VALUES (?, ?);`;
     const params = [title, url];
 
     console.log('Background: Sending dbExec message to offscreen for clipping...');
     try {
-      // Match the ProtocolMap definition: { data: DbExecRequest }
-      const dbResult = await sendMessage('dbExec', { data: { sql: sql, params: params } });
+      const dbResult = await sendMessage('dbExec', { sql: sql, params: params });
       console.log('Background: Offscreen dbExec response:', dbResult);
 
-      // Notify success
       console.log(`Background: Successfully clipped ${url}`);
       browser.notifications.create(`clip-success-${Date.now()}`, {
         type: 'basic',
-        iconUrl: browser.runtime.getURL('/icon/128.png'), 
+        iconUrl: browser.runtime.getURL('/icon/128.png'),
         title: 'Bookmark Saved',
         message: `Saved: ${title}`,
         priority: 0
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Background: Error executing clip via offscreen:', error);
       browser.notifications.create(`clip-error-${Date.now()}`, {
-          type: 'basic',
-          iconUrl: browser.runtime.getURL('/icon/128.png'),
-          title: 'Bookmark Saving Failed', 
-          message: `Could not save ${title}. Error: ${error instanceof Error ? error.message : String(error)}`,
-          priority: 1
-        });
+        type: 'basic',
+        iconUrl: browser.runtime.getURL('/icon/128.png'),
+        title: 'Bookmark Saving Failed',
+        message: `Could not save ${title}. Error: ${error instanceof Error ? error.message : String(error)}`,
+        priority: 1
+      });
     }
-    // Handler returns void implicitly
   });
 
   // --- Listener to fetch Ollama models ---
   onMessage('getOllamaModels', async (message) => {
     console.log('[Background] Received getOllamaModels message', message.data);
-    const { endpoint } = message.data;
-    const responseTarget = 'getOllamaModelsResult'; // Target for the response message
-
-    if (!endpoint) {
-      console.error('[Background] Error: Ollama endpoint not provided.');
-      // Include endpoint (which is null/undefined here) in the error response
-      sendMessage(responseTarget, { endpoint, success: false, error: 'Ollama endpoint not provided.' })
-          .catch(e => console.error(`[Background] Failed to send ${responseTarget} error:`, e));
+    if (!message.data || !message.data.endpoint) {
+      console.error("[Background] getOllamaModels message missing endpoint.");
+      sendMessage('getOllamaModelsResult', { endpoint: undefined, success: false, error: 'No endpoint received' })
+          .catch((e: any) => console.error('[Background] Failed to send error:', e));
       return;
     }
+    const { endpoint } = message.data;
+    const responseTarget = 'getOllamaModelsResult';
 
     const fetchUrl = `${endpoint}/api/tags`;
     console.log(`[Background] Attempting to fetch models from: ${fetchUrl}`);
     try {
       const fetchOptions = { method: 'GET', headers: { 'Accept': 'application/json' } };
-      console.log('[Background] Fetch options:', fetchOptions);
       const response = await fetch(fetchUrl, fetchOptions);
-      console.log(`[Background] Fetch response status: ${response.status}, OK: ${response.ok}`);
-
-      if (!response.ok) {
-        let errorBody = '[Could not read error body]';
-        try { errorBody = await response.text(); } catch {}
-        console.error(`[Background] Fetch failed: Status ${response.status}. Body:`, errorBody);
-        throw new Error(`Failed to fetch Ollama models: ${response.status} ${response.statusText}`);
-      }
       
-      const data = await response.json(); 
-      const models = Array.isArray(data?.models) ? data.models.map((tag: { name: string }) => ({ id: tag.name, name: tag.name })) : [];
-      console.log('[Background] Successfully fetched Ollama models:', models);
-      // Include the endpoint in the success response
-      sendMessage(responseTarget, { endpoint, success: true, models: models })
-        .catch(e => console.error(`[Background] Failed to send ${responseTarget} success:`, e));
+      if (!response.ok) {
+         let errorBody = '[Could not read error body]';
+         try { errorBody = await response.text(); } catch {}
+         console.error(`[Background] Fetch failed: Status ${response.status}. Body:`, errorBody);
+         throw new Error(`Failed to fetch Ollama models: ${response.status} ${response.statusText}`);
+      }
 
-    } catch (error: any) { 
+      const responseData = await response.json(); 
+      const models = Array.isArray(responseData?.models) ? responseData.models.map((tag: { name: string }) => ({ id: tag.name, name: tag.name })) : [];
+      console.log('[Background] Successfully fetched Ollama models:', models);
+      sendMessage(responseTarget, { endpoint, success: true, models: models })
+        .catch((e: any) => console.error(`[Background] Failed to send ${responseTarget} success:`, e));
+
+    } catch (error: any) {
       console.error('[Background] Error during fetch operation:', error);
       let errorMessage = (error instanceof Error) ? error.message : 'Unknown error fetching models.';
       if (errorMessage.includes('Failed to fetch')) {
-          errorMessage += ". Ensure Ollama is running and reachable, and check extension host permissions.";
+        errorMessage += ". Ensure Ollama is running and reachable, and check extension host permissions.";
       }
-       // Include the endpoint in the catch block's error response
       sendMessage(responseTarget, { endpoint, success: false, error: errorMessage })
-        .catch(e => console.error(`[Background] Failed to send ${responseTarget} error:`, e));
+        .catch((e: any) => console.error(`[Background] Failed to send ${responseTarget} error:`, e));
     }
-    // Handler returns void implicitly
   });
 
   // --- Listener for Chat Requests ---
   onMessage('ollamaChatRequest', async (message) => {
     console.log('Background: Received ollamaChatRequest', message.data);
+    if (!message.data || !message.data.prompt) {
+      console.error("Background: ollamaChatRequest message missing prompt.");
+      return;
+    }
     const { prompt, history } = message.data;
 
     const config = await loadUserConfig();
     if (!config) {
       console.error("Background: Cannot process chat request, user config not found.");
-       sendMessage('ollamaResponse', {
-         model: 'unknown',
-         created_at: new Date().toISOString(),
-         status: 'error',
-         error: "LLM configuration not found. Please set it up in the settings."
-       }).catch(e => console.error("Failed to send config error message:", e));
-      return; // Handler returns void
+      sendMessage('ollamaResponse', {
+        model: 'unknown',
+        created_at: new Date().toISOString(),
+        status: 'error',
+        error: "LLM configuration not found. Please set it up in the settings."
+      }).catch((e: any) => console.error("Failed to send config error message:", e));
+      return;
     }
- 
+
     try {
-      // Assuming streamChatResponse handles sending chunks via sendMessage('ollamaResponse', ...)
-      await streamChatResponse({ prompt, history: history || [], config }); 
+      await streamChatResponse({ prompt, history: history || [], config });
       console.log("Background: streamChatResponse processing initiated.");
-    } catch (streamError) {
-        // streamChatResponse should ideally handle its own errors and send error chunks,
-        // but we can log a fallback here.
-        console.error("[Background] Error invoking streamChatResponse:", streamError);
-        // Optionally send a final error chunk if streamChatResponse didn't
-         sendMessage('ollamaResponse', {
-           model: config.chatModel || 'unknown',
-           created_at: new Date().toISOString(),
-           status: 'error',
-           error: streamError instanceof Error ? streamError.message : "Error during streaming"
-         }).catch(e => console.error("Failed to send stream error message:", e));
+    } catch (streamError: any) {
+      console.error("[Background] Error invoking streamChatResponse:", streamError);
+      sendMessage('ollamaResponse', {
+        model: config.chatModel || 'unknown',
+        created_at: new Date().toISOString(),
+        status: 'error',
+        error: streamError instanceof Error ? streamError.message : "Error during streaming"
+      }).catch((e: any) => console.error("Failed to send stream error message:", e));
     }
-    // Handler returns void implicitly
   });
 
   // --- Listener for Flashcard Content Generation ---
   onMessage('generateFlashcardContent', async (message) => {
     console.log('[Background] Received generateFlashcardContent message', message.data);
-    const { text } = message.data;
     const responseTarget = 'flashcardGenerationResult';
-    
-    if (!text) {
+    if (!message.data || !message.data.text) { 
       console.error('[Background] No text provided for flashcard generation.');
-      // Send back an error object
       sendMessage(responseTarget, { data: null, error: 'No text provided' })
-        .catch(e => console.error("Failed to send error result:", e));
+        .catch((e: any) => console.error("Failed to send error result:", e));
       return;
     }
+    const { text } = message.data;
 
     try {
-        const result = await generateFlashcardContentFromText(text);
-        console.log('[Background] Received result from llmService:', result);
+      const result = await generateFlashcardContentFromText(text);
+      console.log('[Background] Received result from llmService:', result);
 
-        await new Promise(resolve => setTimeout(resolve, 50));
-        console.log('[Background] Attempting to send flashcard result after delay...');
+      await new Promise(resolve => setTimeout(resolve, 50));
+      console.log('[Background] Attempting to send flashcard result after delay...');
 
-        // Send back the result object (result can be the data or null)
-        sendMessage(responseTarget, { data: result, error: undefined })
-          .catch(e => console.error("Failed to send flashcard result:", e));
+      sendMessage(responseTarget, { data: result, error: undefined })
+        .catch((e: any) => console.error("Failed to send flashcard result:", e));
     } catch (error: any) {
-        console.error('[Background] Error during flashcard generation:', error);
-        // Send back an error object
-        sendMessage(responseTarget, { data: null, error: error.message || 'Unknown error during generation' })
-          .catch(e => console.error("Failed to send error result:", e));
+      console.error('[Background] Error during flashcard generation:', error);
+      sendMessage(responseTarget, { data: null, error: error.message || 'Unknown error during generation' })
+        .catch((e: any) => console.error("Failed to send error result:", e));
     }
   });
 
@@ -227,115 +220,140 @@ export default defineBackground(() => {
   // ... (placeholder)
 
   // +++ NEW LISTENER for getPageInfo +++
-  onMessage('getPageInfo', async () => {
+  onMessage('getPageInfo', async (message) => {
     console.log("[Background] Received getPageInfo request.");
     try {
       const tabs = await browser.tabs.query({ active: true, currentWindow: true });
       const currentTab = tabs[0];
       if (currentTab && currentTab.url && currentTab.title) {
         console.log("[Background] Sending page info:", { title: currentTab.title, url: currentTab.url });
-        // Ensure ProtocolMap expects Promise<PageInfo | null>
         return { title: currentTab.title, url: currentTab.url };
       } else {
         console.warn("[Background] Could not get active tab info.");
         return null;
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("[Background] Error getting page info:", error);
       return null;
     }
   });
 
   // +++ NEW LISTENER for getSelectedText +++
-  onMessage('getSelectedText', async () => {
+  onMessage('getSelectedText', async (message) => {
     console.log("[Background] Received getSelectedText request.");
     try {
       const tabs = await browser.tabs.query({ active: true, currentWindow: true });
       const currentTab = tabs[0];
-      const tabId = currentTab?.id;
-
-      if (tabId && currentTab.url?.startsWith('http')) {
-        console.log(`[Background] Sending _requestSelectionFromContentScript to tab ${tabId}`);
-        // Ensure ProtocolMap defines _requestSelectionFromContentScript
-        const response = await sendMessage('_requestSelectionFromContentScript', undefined, { tabId: tabId }); 
-        console.log(`[Background] Received response from content script for tab ${tabId}:`, response);
-        // Ensure ProtocolMap expects Promise<{ text: string } | null>
-        if (response && typeof response.text === 'string') {
-          return { text: response.text }; 
-        } else {
-          console.warn(`[Background] Invalid or empty response from content script for tab ${tabId}:`, response);
-          return null;
-        }
-      } else {
-        console.log(`[Background] Cannot get selection from non-http(s) URL or no active tab ID.`);
+      if (!currentTab || !currentTab.id) {
+        console.warn("[Background] Could not get active tab ID for script injection.");
         return null;
       }
-    } catch (error) {
-      console.error("[Background] Error getting selected text:", error);
-      if (error instanceof Error && (error.message.includes('Could not establish connection') || error.message.includes('No receiving end'))) {
-          console.warn("[Background] Content script likely not injected or not responding on the active page.");
+
+      let needsInjection = true;
+      try {
+         const response = await browser.tabs.sendMessage(currentTab.id, { type: 'ping' });
+         if (response && (response as any).pong) {
+            needsInjection = false;
+         }
+      } catch (e: any) {
+         console.log("[Background] Ping failed: Content script likely not injected or inaccessible.");
       }
+
+      if (needsInjection) {
+        console.log(`[Background] Injecting content script into tab ${currentTab.id}...`);
+        try {
+            await browser.scripting.executeScript({
+                target: { tabId: currentTab.id },
+                files: ['content-scripts/content.js'],
+            });
+            console.log(`[Background] Content script injected.`);
+            await new Promise(resolve => setTimeout(resolve, 100)); 
+        } catch (injectionError: any) {
+            console.error(`[Background] Failed to inject content script into tab ${currentTab.id}:`, injectionError);
+            return null; 
+        }
+      }
+
+      console.log("[Background] Sending getSelection message to content script...");
+      const selection = await browser.tabs.sendMessage(currentTab.id, { type: 'getSelection' });
+      console.log("[Background] Received selection from content script:", selection);
+      return selection && typeof (selection as any).text === 'string' ? { text: (selection as any).text } : null;
+
+    } catch (error: any) {
+      console.error("[Background] Error getting selected text:", error);
+       if (error.message?.includes("Could not establish connection")) {
+         console.warn("[Background] Connection error likely means the content script wasn't ready or page is restricted.");
+       } else if (error.message?.includes("No matching message handler")) {
+         console.warn("[Background] 'No matching message handler' likely means the content script is not injected or listening correctly.");
+       }
       return null;
     }
   });
 
   // +++ NEW LISTENER for translateText +++
   onMessage('translateText', async (message) => {
-    console.log("[Background] Received translateText request:", message.data);
-    const { text, targetLang } = message.data; // Use targetLang
-    if (!text || !targetLang) {
-      console.error("[Background] Missing text or targetLang for translation.");
-      // Throw error to reject the promise as expected by ProtocolMap
-      throw new Error("Missing text or target language for translation.");
+    console.log("[Background] Received translateText request", message.data);
+    if (!message.data || !message.data.text || !message.data.targetLang) {
+        console.error("Background: Missing text or target language for translation.");
+        throw new Error("Missing text or target language for translation.");
     }
+    const { text, targetLang } = message.data;
     try {
-      // Assuming llmService.translateText handles loading config etc.
-      const translationResult = await translateText(text, targetLang);
-      console.log("[Background] Translation result from llmService:", translationResult);
-      if (translationResult === null) {
-        // Throw error if translation failed as expected by ProtocolMap
-        throw new Error("Translation failed or returned null.");
-      }
-      return translationResult; // Return the string
+        const translated = await translateText(text, targetLang);
+        if (translated === null) {
+            console.error("[Background] Translation service returned null.");
+            throw new Error("Translation failed or returned null.");
+        }
+        console.log("[Background] Translation successful:", translated);
+        return translated;
     } catch (error: any) {
-        console.error("[Background] Error during translation:", error);
-        // Re-throw the error to reject the promise
-        throw new Error(`Translation failed: ${error.message || String(error)}`);
+        console.error("[Background] Translation error:", error);
+        throw new Error(error.message || "Translation failed");
     }
   });
 
   // +++ NEW LISTENER for saveFlashcardAndNotify +++
   onMessage('saveFlashcardAndNotify', async (message) => {
-    console.log("[Background] Received saveFlashcardAndNotify request:", message.data);
+    console.log('[Background] Received saveFlashcardAndNotify request:', message.data);
+    if (!message.data || !message.data.cardData) {
+        console.error("Background: saveFlashcardAndNotify message received without cardData.");
+        browser.notifications.create(`flashcard-save-error-${Date.now()}`, {
+            type: 'basic',
+            iconUrl: browser.runtime.getURL('/icon/128.png'),
+            title: 'Flashcard Save Failed',
+            message: `Error: Missing flashcard data.`,
+            priority: 1
+        });
+        return null;
+    }
     const { cardData } = message.data;
 
-    if (!cardData) {
-      console.error("[Background] No cardData provided for saveFlashcardAndNotify.");
-      throw new Error("No flashcard data provided."); // Reject the promise
-    }
-
     try {
-      // 1. Create the flashcard
-      // We need to provide the full Flashcard structure expected by createFlashcard
-      // App.tsx already prepares most of it, but ensure all required fields are present
-      // Note: createFlashcard handles setting initial FSRS state
-      const newFlashcard = await createFlashcard(cardData as Omit<Flashcard, 'id' | 'created_at' | 'due' | 'stability' | 'difficulty' | 'elapsed_days' | 'scheduled_days' | 'reps' | 'lapses' | 'state' | 'last_review'>);
-      console.log("[Background] Flashcard created in DB:", newFlashcard);
+      const newFlashcard = await createFlashcard(cardData as any);
+      console.log('[Background] Flashcard created in DB:', newFlashcard);
 
-      // 2. Create the associated chat message
       await createChatMessage({ role: 'flashcard', flashcard_id: newFlashcard.id });
-      console.log("[Background] Associated chat message created for flashcard ID:", newFlashcard.id);
+      console.log(`[Background] Associated chat message created for flashcard ID: ${newFlashcard.id}`);
 
-      // 3. Send notification to update UI (if needed, e.g., chat history)
-      // sendMessage('_chatHistoryUpdated', undefined).catch(e => console.error("Failed to send _chatHistoryUpdated notification:", e));
-
-      // 4. Return the saved flashcard object as expected by the Promise
+      browser.notifications.create(`flashcard-save-success-${Date.now()}`, {
+        type: 'basic',
+        iconUrl: browser.runtime.getURL('/icon/128.png'),
+        title: 'Flashcard Saved',
+        message: `Saved: ${cardData.front || 'Cloze Card'}`,
+        priority: 0
+      });
       return newFlashcard;
 
     } catch (error: any) {
-      console.error("[Background] Error processing saveFlashcardAndNotify:", error);
-      // Throw the error to reject the promise
-      throw new Error(`Failed to save flashcard: ${error.message || String(error)}`);
+      console.error('[Background] Error saving flashcard or creating chat message:', error);
+      browser.notifications.create(`flashcard-save-error-${Date.now()}`, {
+        type: 'basic',
+        iconUrl: browser.runtime.getURL('/icon/128.png'),
+        title: 'Flashcard Save Failed',
+        message: `Error: ${error.message || 'Unknown error'}`,
+        priority: 1
+      });
+      return null;
     }
   });
 
@@ -349,7 +367,7 @@ export default defineBackground(() => {
     if (details.reason === 'install') {
       console.log('Performing first-time setup...');
       // Only need to ensure offscreen document exists. Schema is initialized within offscreen.ts.
-      await setupOffscreenDocument().catch(error => {
+      await setupOffscreenDocument().catch((error: any) => {
         console.error('[Background] Initial setupOffscreenDocument failed on install:', error);
       });
 
@@ -382,7 +400,7 @@ export default defineBackground(() => {
     try {
       await setupOffscreenDocument();
       console.log('[Background] Offscreen document setup complete on startup.');
-    } catch (error) {
+    } catch (error: any) {
       console.error('[Background] setupOffscreenDocument failed on startup:', error);
     }
   });

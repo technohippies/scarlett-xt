@@ -97,64 +97,45 @@ export interface PageInfo { // Assuming this structure based on App.tsx usage
   url: string;
 }
 
-// Define the overall protocol map for type safety
+// Define the overall protocol map using FUNCTION SIGNATURES consistently
 export interface ProtocolMap {
-  // Message from Popup -> Background to trigger clipping
-  clipPage: (data: ClipData) => void; // Should return void if background handles notifications
+  // == Simple Fire-and-Forget or Notification Messages ==
+  clipPage: (data: ClipData) => void;
+  ollamaResponse: (data: OllamaStreamChunk) => void; // Assuming background sends these, UI listens
+  getOllamaModelsResult: (data: GetOllamaModelsResponse) => void; // Assuming background sends these, UI listens
+  _chatHistoryUpdated: () => void;
+  addSystemMessage: (data: { content: string }) => void; // Define data type
+  flashcardGenerationResult: (data: { data: FlashcardGenerationResult | null; error?: string }) => void;
 
-  // Message from UI -> Background to get available Ollama models
-  getOllamaModels: (data: { endpoint: string }) => void; // Request trigger
-  getOllamaModelsResult: GetOllamaModelsResponse; // Response with models or error
+  // == Messages expecting a response ==
+  getOllamaModels: (data: { endpoint: string }) => void; // Request triggers separate Result message, so response is void
+  ollamaChatRequest: (data: OllamaChatRequest) => void; // Request triggers ollamaResponse stream, so response is void
+  getChatHistory: (data: { sessionId?: number | 'current' }) => Promise<ChatMessage[]>;
+  translateText: (data: { text: string; targetLang: string }) => Promise<string>;
+  getSelectedText: () => Promise<{ text: string } | null>;
+  getPageInfo: () => Promise<PageInfo | null>;
+  saveFlashcardAndNotify: (data: { cardData: Partial<Flashcard> }) => Promise<Flashcard | null>;
 
-  // == DB Operations (UI/Background -> Offscreen) ==
-  dbExec: { data: DbExecRequest }; // Expect object containing request data
-  dbQuery: { data: DbQueryRequest }; // Expect object containing request data
-
-  // == Chat Messages ==
-  ollamaChatRequest: (data: OllamaChatRequest) => void; // Request trigger (stream handled separately)
-  ollamaResponse: OllamaStreamChunk; // Use the updated type
-  getChatHistory: (data: { sessionId?: number | 'current' }) => Promise<ChatMessage[]>; // Direct request/response
-  addSystemMessage: { content: string }; // Simple message
+  // == DB Operations ==
+  dbExec: (data: DbExecRequest) => Promise<any>; 
+  dbQuery: (data: DbQueryRequest) => Promise<any[]>; 
+  queryDb: (data: { query: string; params?: any[] }) => Promise<any>;
 
   // == Flashcard Generation ==
-  generateFlashcardContent: (
-    params: {
+  generateFlashcardContent: (data: {
       text: string;
       sourceUrl: string | null;
       sourceLanguage: string | null;
       targetLanguage: string | null;
-    }
-  ) => void; // Fire and forget, result sent via flashcardGenerationResult
-  flashcardGenerationResult: (
-    result: { data: FlashcardGenerationResult; error?: string }
-  ) => void;
-
-  // == Translation ==
-  translateText: (params: { text: string; targetLang: string }) => Promise<string>;
-
-  // == Popup Data Requests ==
-  getSelectedText: () => Promise<{ text: string } | null>; // Define expected return type
-  getPageInfo: () => Promise<PageInfo | null>; // Define expected return type
-
-  // == Internal Background <-> Content Script Communication ==
-  _requestSelectionFromContentScript: () => Promise<{ text: string } | null>; // Message BG sends to CS
+  }) => void; // Fire and forget, result sent via flashcardGenerationResult
 
   // == Other existing types ==
-  streamOllamaRequest: { prompt: string; history: ChatMessage[]; config: any };
-  saveConfiguration: { configJson: string };
-  loadConfiguration: null;
-  queryDb: { query: string; params?: any[] };
+  streamOllamaRequest: (data: { prompt: string; history: ChatMessage[]; config: any }) => void;
+  saveConfiguration: (data: { configJson: string }) => Promise<void>; 
+  loadConfiguration: () => Promise<any>; // Assuming no request data
 
-  // New messages
-  // getDatabaseStats: () => Promise<DatabaseStats>; // REMOVED this line
-
-  // Message to save flashcard AND notify UI
-  saveFlashcardAndNotify: (
-    params: { cardData: Partial<Flashcard> } // Use Partial for now, refine later if needed
-  ) => Promise<Flashcard | null>; // Returns the saved card or null on error
-
-  // Internal notification message for UI updates
-  _chatHistoryUpdated: () => void;
+  // == Internal Background <-> Content Script Communication ==
+  _requestSelectionFromContentScript: () => Promise<{ text: string } | null>;
 }
 
 // Type for the message structure

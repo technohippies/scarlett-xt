@@ -1,16 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import browser from 'webextension-polyfill';
-import { Gear } from '@phosphor-icons/react'; // Import the Gear icon
 import { sendMessage, onMessage } from '../../utils/messaging'; // Use the original and add onMessage
-import type { ProtocolMap, PageInfo, FlashcardGenerationResult } from '../../utils/messaging'; // Import FlashcardGenerationResult
+import type { PageInfo } from '../../utils/messaging'; // Import FlashcardGenerationResult
 import PopupDisplay from '../../src/components/PopupDisplay'; // Update import path
 import { FlashcardCreatorPopup } from '../../src/components/popups/FlashcardCreatorPopup'; // Import the new component
-import { createBookmark, createFlashcard, createChatMessage, getChatHistory } from '../../utils/db'; // Removed createFlashcard
+import { createBookmark, createChatMessage } from '../../utils/db'; // Removed createFlashcard
 import type { Flashcard } from '../../src/types/db'; // Import Flashcard type
 import { cn } from '../../lib/utils'; // Import the cn function
 import { Button } from '../../src/components/ui/button';
 // Import FSRSCard type definition for Omit
-import { Card as FSRSCard, State } from 'ts-fsrs';
+import { State } from 'ts-fsrs';
 
 // Define the structure expected from the background script for page info
 // interface PageInfo {
@@ -32,9 +31,6 @@ function App() {
   const [generatedFlashcard, setGeneratedFlashcard] = useState<{ front: string; back: string } | null>(null);
   const [generatedCloze, setGeneratedCloze] = useState<{ text: string } | null>(null);
   const [isGenerating, setIsGenerating] = useState(false); // Loading state for generation
-
-  // Add a ref to track initial generation done
-  const initialGenerationDone = React.useRef<boolean>(false);
 
   // --- NEW Translation State --- 
   const [translatedFlashcardBack, setTranslatedFlashcardBack] = useState<string | null>(null);
