@@ -68,14 +68,6 @@ pnpm storybook
 
 *（可选：如果需要，请参阅下面有关手动设置 Storybook 的原始 README 注释）。*
 
-## ElectricSQL / PGlite 解决方法
-
-**问题:** `@electric-sql/pglite` 所需的 WASM 文件未被 WXT 的默认构建过程正确处理。
-
-**解决方法:** 将必要的 `@electric-sql/pglite` 文件（JS、WASM、数据、块、向量、工作线程）手动复制到 `public/@electric-sql/pglite/` 目录中。这确保它们包含在最终的扩展构建中，尽管它绕过了这些特定文件的标准依赖项管理。
-
-*（请参阅下面有关使用的特定 `cp` 命令的原始 README 注释）。*
-
 ---
 
 ***原始注释（供参考）：***
@@ -95,18 +87,3 @@ pnpm storybook
      },
    },
    ```
-
-*ElectricSQL 手动复制命令：*
-```sh
-# 注意：原始路径是绝对路径，如有必要请进行调整
-TARGET_DIR="./public/@electric-sql/pglite"
-SOURCE_DIR="./node_modules/@electric-sql/pglite"
-mkdir -p "$TARGET_DIR"
-cp "$SOURCE_DIR/index.js" "$TARGET_DIR/"
-cp "$SOURCE_DIR/postgres.wasm" "$TARGET_DIR/"
-cp "$SOURCE_DIR/postgres.data" "$TARGET_DIR/"
-cp "$SOURCE_DIR/chunk-*.js" "$TARGET_DIR/"
-cp -R "$SOURCE_DIR/vector" "$TARGET_DIR/"
-cp -R "$SOURCE_DIR/worker" "$TARGET_DIR/"
-cp "$SOURCE_DIR/templating.js" "$TARGET_DIR/"
-``` 
