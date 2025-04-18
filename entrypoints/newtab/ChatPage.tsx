@@ -10,7 +10,7 @@ import { FlashcardFrontBackMessage } from '../../src/components/chat/FlashcardFr
 import ChatInput from './ChatInput';
 import { queryDb, getChatHistory, createChatMessage } from '../../utils/db';
 import { sendMessage, onMessage } from '../../utils/messaging';
-import type { ChatHistoryItem, ChatMessageDb } from '../../src/types/db';
+import type { ChatHistoryItem } from '../../src/types/db';
 
 const ChatPage: React.FC = () => {
   const [messages, setMessages] = useState<ChatHistoryItem[]>([]);
@@ -253,8 +253,13 @@ const ChatPage: React.FC = () => {
                   } else if (item.flashcard.type === 'front_back') {
                      return <FlashcardFrontBackMessage key={`fb-${item.message.id}`} flashcard={item.flashcard} />;
                   }
-                  break;
+                  // If flashcard type is not handled above, return null for this case
+                  console.warn(`[ChatPage Render] Unhandled flashcard type: ${item.flashcard.type}`);
+                  return null; 
               }
+              // If item.type is somehow not message/bookmark/flashcard (shouldn't happen with strict types),
+              // TypeScript might complain. If so, add a `default:` case to the switch returning null.
+              // For now, assume the switch is exhaustive for ChatHistoryItem['type'].
             })
           )}
           {isLoading && <AssistantLoadingMessage />}

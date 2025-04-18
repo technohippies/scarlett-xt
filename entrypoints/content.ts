@@ -1,8 +1,5 @@
 import browser from 'webextension-polyfill';
 import { onMessage } from '../utils/messaging';
-import type { ProtocolMap } from '../utils/messaging';
-// Remove the incorrect import
-// import { defineContentScript } from 'wxt/...'; 
 
 console.log('[Scarlett Content Script] Preparing...');
 

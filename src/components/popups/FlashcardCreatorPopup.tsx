@@ -1,10 +1,9 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
 import { ArrowClockwise, Cards, BracketsCurly, Translate } from '@phosphor-icons/react';
 import type { Flashcard } from '../../types/db';
-import { cn } from '../../../lib/utils';
 
 interface FlashcardCreatorPopupProps {
   selectedText: string;
@@ -28,13 +27,9 @@ interface FlashcardCreatorPopupProps {
 export const FlashcardCreatorPopup: React.FC<FlashcardCreatorPopupProps> = ({
   selectedText,
   onSaveFlashcard,
-  onClose,
   onGenerate,
   generatedFlashcard,
   generatedCloze,
-  isGenerating: isParentGenerating,
-  status,
-  statusIsError,
   onTranslateFlashcard,
   onTranslateCloze,
   translatedFlashcardBack,
