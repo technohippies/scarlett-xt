@@ -1,25 +1,90 @@
----
-name: Storybook
-description: Integrate Storybook with WXT to develop components.
+# Scarlett AI: Tutor, Lifecoach, Friend.
+
+[English](README.md) | [简体中文](README.zh.md)
 ---
 
+Enhance learning, focus, and digital well-being wih Scarlett.
+
+**Features:**
+*   **LLM Integration:** Supports Ollama, OpenRouter, and Venice backends.
+*   **Web Clipping:** Generate flashcards and cloze deletions from web text for memory and language learning.
+*   **Bookmarks:** Save links with context and perform semantic search.
+*   **Browser History Analysis:** Categorize browsing activity (addictive, distracting, productive, neutral).
+*   **Focus Tracking:** Monitor context switching during work sessions.
+
+**In Progress:**
+*   In-browser FSRS flashcard system.
+*   Improved chat interface and capabilities.
+*   Syncing support for Anki, Obsidian, AnyNote.
+*   Secure cloud backup via Lit Protocol.
+
+## Setup
+
+1.  Install dependencies:
+    ```sh
+    pnpm install
+    ```
+
+## Development
+
+*   **Chrome:** Run the development server and load the `dist/` directory as an unpacked extension.
+    ```sh
+    pnpm dev
+    ```
+*   **Firefox:** Run the development server for Firefox and load the `dist/` directory as a temporary add-on.
+    ```sh
+    pnpm dev:firefox
+    ```
+
+## Building
+
+*   **Chrome:** Create a production build in the `.output/chrome-mv3` directory.
+    ```sh
+    pnpm build
+    ```
+*   **Firefox:** Create a production build in the `.output/firefox-mv3` directory.
+    ```sh
+    pnpm build:firefox
+    ```
+
+## Packaging
+
+*   **Chrome:** Create a zip file for the Chrome Web Store in `.output/chrome-mv3.zip`.
+    ```sh
+    pnpm zip
+    ```
+*   **Firefox:** Create a zip file for Firefox Add-ons in `.output/firefox-mv3.zip`.
+    ```sh
+    pnpm zip:firefox
+    ```
+
+## Storybook
+
+Develop and test UI components in isolation using Storybook.
+
 ```sh
-pnpm i
 pnpm storybook
 ```
 
-To add storybook:
+*(Optional: See original README notes below regarding manual Storybook setup if needed).*
 
+## ElectricSQL / PGlite Workaround
+
+**Issue:** The WASM files required by `@electric-sql/pglite` are not correctly handled by WXT's default build process.
+
+**Workaround:** Necessary `@electric-sql/pglite` files (JS, WASM, data, chunks, vector, worker) are manually copied into the `public/@electric-sql/pglite/` directory. This ensures they are included in the final extension build, although it bypasses standard dependency management for these specific files.
+
+*(See original README notes below for the specific `cp` commands used).*
+
+---
+
+***Original Notes (for reference):***
+
+*Storybook Manual Setup Steps (if `pnpm storybook` doesn't work initially):*
 1. Create the `.storybook/vite.config.ts` file from this example
-2. Install the vite builder
-   ```sh
-   pnpm i @storybook/builder-vite
-   ```
-3. Run `storybook init` like usual
-   ```sh
-   pnpm dlx storybook@latest init
-   ```
-4. Update `.storybook/main.ts` to use `./.storybook/vite.config.ts` instead of `./vite.config.ts`
+2. Install the vite builder: `pnpm i @storybook/builder-vite`
+3. Run `storybook init` like usual: `pnpm dlx storybook@latest init`
+4. Update `.storybook/main.ts` to use `./.storybook/vite.config.ts`:
    ```diff
    framework: {
      name: "@storybook/react-vite",
@@ -31,24 +96,17 @@ To add storybook:
    },
    ```
 
-
-because of electric-sql pglite wasm not working with wxt
-    mkdir -p /media/xo42/th427/Code/scarlett-wxt-storybook/public/@electric-sql/pglite
-    # Core JS file
-    cp /media/xo42/th427/Code/scarlett-wxt-storybook/node_modules/@electric-sql/pglite/index.js /media/xo42/th427/Code/scarlett-wxt-storybook/public/@electric-sql/pglite/
-
-    # Core WASM and data
-    cp /media/xo42/th427/Code/scarlett-wxt-storybook/node_modules/@electric-sql/pglite/postgres.wasm /media/xo42/th427/Code/scarlett-wxt-storybook/public/@electric-sql/pglite/
-    cp /media/xo42/th427/Code/scarlett-wxt-storybook/node_modules/@electric-sql/pglite/postgres.data /media/xo42/th427/Code/scarlett-wxt-storybook/public/@electric-sql/pglite/
-
-    # JS chunks (use wildcard)
-    cp /media/xo42/th427/Code/scarlett-wxt-storybook/node_modules/@electric-sql/pglite/chunk-*.js /media/xo42/th427/Code/scarlett-wxt-storybook/public/@electric-sql/pglite/
-
-    # Vector extension directory (use -R for recursive)
-    cp -R /media/xo42/th427/Code/scarlett-wxt-storybook/node_modules/@electric-sql/pglite/vector /media/xo42/th427/Code/scarlett-wxt-storybook/public/@electric-sql/pglite/
-
-    # Worker directory (use -R for recursive)
-    cp -R /media/xo42/th427/Code/scarlett-wxt-storybook/node_modules/@electric-sql/pglite/worker /media/xo42/th427/Code/scarlett-wxt-storybook/public/@electric-sql/pglite/
-
-    # Templating JS file (if needed)
-    cp /media/xo42/th427/Code/scarlett-wxt-storybook/node_modules/@electric-sql/pglite/templating.js /media/xo42/th427/Code/scarlett-wxt-storybook/public/@electric-sql/pglite/
+*ElectricSQL Manual Copy Commands:*
+```sh
+# Note: Paths were absolute in the original, adapt if necessary
+TARGET_DIR="./public/@electric-sql/pglite"
+SOURCE_DIR="./node_modules/@electric-sql/pglite"
+mkdir -p "$TARGET_DIR"
+cp "$SOURCE_DIR/index.js" "$TARGET_DIR/"
+cp "$SOURCE_DIR/postgres.wasm" "$TARGET_DIR/"
+cp "$SOURCE_DIR/postgres.data" "$TARGET_DIR/"
+cp "$SOURCE_DIR/chunk-*.js" "$TARGET_DIR/"
+cp -R "$SOURCE_DIR/vector" "$TARGET_DIR/"
+cp -R "$SOURCE_DIR/worker" "$TARGET_DIR/"
+cp "$SOURCE_DIR/templating.js" "$TARGET_DIR/"
+```
